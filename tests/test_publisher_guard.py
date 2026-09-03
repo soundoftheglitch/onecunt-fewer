@@ -20,7 +20,7 @@ class PublisherGuardTests(unittest.TestCase):
                                           "ntforum-search-v1.manifest.sig",
                                           "ntforum-search-v1-0000.gz.part",
                                           "ntforum-categories-v1.json.gz"])
-        for tag in ("v4.5.1", "main", "../v4.5.0"):
+        for tag in ("v4.6.0", "main", "../v4.5.0"):
             with self.assertRaises(PublisherPolicyError): validate_release_target(tag)
         with self.assertRaises(PublisherPolicyError): validate_release_target("v4.5.0", ["token.txt"])
 

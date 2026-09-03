@@ -24,8 +24,8 @@ SERVICE = Path("/home/x0ar/.config/systemd/user/fewercunts-snapshot-publish.serv
 TIMER = Path("/home/x0ar/.config/systemd/user/fewercunts-snapshot-publish.timer")
 PRIVATE_KEY = Path("/home/x0ar/.config/fewercunts/search-index-signing-private.pem")
 GH_HOSTS = Path("/home/x0ar/.config/gh/hosts.yml")
-ALLOWED_TAG = re.compile(r"v4\.5\.0\Z")
-ALLOWED_ASSET = re.compile(r"(?:search-latest\.json|categories-latest\.json|ntforum-categories-v1\.json\.gz|ntforum-categories-v1\.manifest\.(?:json|sig)|ntforum-search-v1-[A-Za-z0-9.-]+|ntforum-search-v1\.manifest\.(?:json|sig)|fewerCunts(?:-firefox)?-4\.5\.0\.(?:zip|xpi))\Z")
+ALLOWED_TAG = re.compile(r"v4\.5\.\d+\Z")
+ALLOWED_ASSET = re.compile(r"(?:search-latest\.json|categories-latest\.json|ntforum-categories-v1\.json\.gz|ntforum-categories-v1\.manifest\.(?:json|sig)|ntforum-search-v1-[A-Za-z0-9.-]+|ntforum-search-v1\.manifest\.(?:json|sig)|fewerCunts(?:-firefox)?-4\.5\.\d+\.(?:zip|xpi))\Z")
 
 
 class PublisherPolicyError(RuntimeError):

@@ -28,7 +28,7 @@ NTForum access filters the page and, when search is enabled, reads bounded anony
 - Authentication, financial, health and location data: not collected. Saved items, unread state and notification state remain on the device; drafts are not stored by the extension.
 - Data sale, transfer, analytics, advertising, and remote code: none.
 - Certification: data is not sold or transferred outside the approved use cases; data is not used for purposes unrelated to the extension's single purpose; data is not used for creditworthiness or lending.
-- Privacy-policy URL: the public repository's `store/PRIVACY.md` policy applies to version 4.5.0.
+- Privacy-policy URL: the public repository's `store/PRIVACY.md` policy applies to version 4.5.1.
 
 ## Assets
 

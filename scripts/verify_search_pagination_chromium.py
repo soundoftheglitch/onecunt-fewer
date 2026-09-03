@@ -46,7 +46,8 @@ def main() -> None:
                 def matching(browser):
                     node = browser.find_element(By.CSS_SELECTOR, selector)
                     current_titles = titles()
-                    return node if (node.get_attribute("value") == f"{expected:02d}"
+                    return node if (browser.find_element(By.TAG_NAME, "html").get_attribute("data-fewercunts-startup") == "ready"
+                                    and node.get_attribute("value") == f"{expected:02d}"
                                     and (first_title is None or (current_titles and current_titles[0] == first_title))) else False
                 return wait.until(matching)
             except TimeoutException as error:
@@ -60,7 +61,7 @@ def main() -> None:
                 raise AssertionError(f"page {expected} did not render: {diagnostic}") from error
 
         def titles():
-            return [node.text for node in driver.find_elements(
+            return [node.get_attribute("textContent") for node in driver.find_elements(
                 By.CSS_SELECTOR, ".fewercunts-result a[data-fewercunts-doc-key]")]
 
         def control(label):
@@ -80,9 +81,10 @@ def main() -> None:
             })
             driver.get("https://ntforum.net/#view=search&q=needle&scopes=post%2Creplies&page=2")
             page_input = page_number(2)
-            assert titles()[0] == "Needle result 26" and titles()[-1] == "Needle result 50"
-            assert "277 results" in driver.find_element(By.CSS_SELECTOR, ".fewercunts-search-status").text
-            assert driver.find_element(By.CSS_SELECTOR, '.fewercunts-pagination[aria-label="Search results pagination"] .fewercunts-page-total').text == "12"
+            initial_titles = titles()
+            assert initial_titles[0] == "Needle result 26" and initial_titles[-1] == "Needle result 50", initial_titles
+            assert "277 results" in driver.find_element(By.CSS_SELECTOR, ".fewercunts-search-status").get_attribute("textContent")
+            assert driver.find_element(By.CSS_SELECTOR, '.fewercunts-pagination[aria-label="Search results pagination"] .fewercunts-page-total').get_attribute("textContent") == "12"
             assert control("First").is_enabled() and control("Previous").is_enabled()
             assert control("Next").is_enabled() and control("Last").is_enabled()
             assert page_input.get_attribute("inputmode") == "numeric"
@@ -187,13 +189,13 @@ def main() -> None:
             assert all(request["query"] == "needle" and request["scopes"] == ["post", "replies"] for request in requests)
 
             tabs = driver.find_elements(By.CSS_SELECTOR, ".fewercunts-search-tabs [role='tab']")
-            assert [tab.text for tab in tabs] == ["Posts", "Replies"]
+            assert [tab.get_attribute("textContent") for tab in tabs] == ["Posts", "Replies"]
             assert tabs[0].get_attribute("aria-selected") == "true" and tabs[0].get_attribute("tabindex") == "0"
             tabs[0].send_keys(Keys.END)
             page_number(1, "Needle result 1")
             assert driver.current_url.endswith("#view=search&q=needle&scopes=post%2Creplies&tab=replies")
             selected = driver.switch_to.active_element
-            assert selected.text == "Replies" and selected.get_attribute("aria-selected") == "true"
+            assert selected.get_attribute("textContent") == "Replies" and selected.get_attribute("aria-selected") == "true"
             assert titles()[0] == "Needle result 1"
             control("Last").click()
             page_number(12)
@@ -203,7 +205,7 @@ def main() -> None:
             driver.refresh()
             page_number(12)
             assert driver.find_element(By.CSS_SELECTOR,
-                ".fewercunts-search-tabs [aria-selected='true']").text == "Replies"
+                ".fewercunts-search-tabs [aria-selected='true']").get_attribute("textContent") == "Replies"
             driver.find_element(By.CSS_SELECTOR, ".fewercunts-search-tabs [role='tab']:first-child").click()
             page_number(1, "Needle result 1")
             assert "tab=" not in driver.current_url
@@ -226,21 +228,21 @@ def main() -> None:
                         panel: document.querySelector('.fewercunts-recent-searches')?.outerHTML};
                     """)
                     raise AssertionError(f"recent search was not rendered: {diagnostic}") from error
-            assert [node.text for node in driver.find_elements(By.CSS_SELECTOR, ".fewercunts-recent-run")] == ["Needle", "Second needle"]
+            assert [node.get_attribute("textContent") for node in driver.find_elements(By.CSS_SELECTOR, ".fewercunts-recent-run")] == ["Needle", "Second needle"]
             driver.execute_script("localStorage.setItem('fewercunts.navigation-state.v1', '[]')")
         finally:
             driver.quit()
 
         restarted = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
         try:
-            restarted.get("https://ntforum.net/")
+            restarted.get("https://ntforum.net/#view=search&q=Needle&scopes=post%2Creplies")
             restart_wait = WebDriverWait(restarted, 40, poll_frequency=.1)
-            restart_wait.until(lambda browser: browser.find_elements(By.CSS_SELECTOR, ".fewercunts-primary-nav"))
+            restart_wait.until(lambda browser: browser.find_element(By.TAG_NAME, "html").get_attribute("data-fewercunts-startup") == "ready")
             restarted.find_element(By.XPATH,
                 "//button[contains(@class,'fewercunts-top-nav') and normalize-space()='Search']").click()
             restart_wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, ".fewercunts-recent-searches").is_displayed())
             suggestions = restarted.find_elements(By.CSS_SELECTOR, ".fewercunts-recent-run")
-            assert [node.text for node in suggestions] == ["Needle", "Second needle"]
+            assert [node.get_attribute("textContent") for node in suggestions] == ["Needle", "Second needle"]
             assert all(node.tag_name == "button" for node in suggestions)
             suggestions[0].send_keys(Keys.ENTER)
             restart_wait.until(lambda browser: "q=Needle" in browser.current_url)

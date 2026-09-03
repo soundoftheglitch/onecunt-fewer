@@ -1,14 +1,14 @@
-# fewerCunts 4.5.0
+# fewerCunts 4.5.1
 
 `fewerCunts` is a privacy-focused Manifest V3 extension for [ntforum.net](https://ntforum.net/). It preserves the forum's visual language while adding local full-forum search, categories, author activity, unread state, saved and muted threads, notifications, responsive pagination, and an editable block list.
 
-This repository begins at version **4.5.0**. It is the only supported and distributed version.
+This repository begins at version **4.5.0**. Version **4.5.1** is the current supported release.
 
 > This independent project is not affiliated with or endorsed by ntforum.net.
 
 ## Install on Chromium
 
-1. Download [`fewerCunts-4.5.0.zip`](https://github.com/soundoftheglitch/onecunt-fewer/releases/download/v4.5.0/fewerCunts-4.5.0.zip).
+1. Download [`fewerCunts-4.5.1.zip`](https://github.com/soundoftheglitch/onecunt-fewer/releases/download/v4.5.1/fewerCunts-4.5.1.zip).
 2. Extract it to a permanent directory.
 3. Open `chrome://extensions` and enable **Developer mode**.
 4. Select **Load unpacked** and choose the extracted directory containing `manifest.json`.
@@ -16,7 +16,7 @@ This repository begins at version **4.5.0**. It is the only supported and distri
 
 ## Install temporarily on Firefox
 
-1. Download [`fewerCunts-firefox-4.5.0.xpi`](https://github.com/soundoftheglitch/onecunt-fewer/releases/download/v4.5.0/fewerCunts-firefox-4.5.0.xpi).
+1. Download [`fewerCunts-firefox-4.5.1.xpi`](https://github.com/soundoftheglitch/onecunt-fewer/releases/download/v4.5.1/fewerCunts-firefox-4.5.1.xpi).
 2. Open `about:debugging#/runtime/this-firefox`.
 3. Select **Load Temporary Add-on** and choose the XPI.
 4. Reload [ntforum.net](https://ntforum.net/).
@@ -71,4 +71,4 @@ Browser verification scripts in `scripts/verify_*_chromium.py` and `scripts/veri
 
 ## Release policy
 
-4.5.0 is an intentionally clean first release. A release is accepted only when its source commit, `main`, `v4.5.0` tag, Chromium ZIP, Firefox XPI, anonymous downloads, and publisher checkout agree byte-for-byte. Credential scanning and package allowlists run before publication.
+4.5.0 is the intentionally clean first release. Each subsequent correction increments the patch component. A release is accepted only when its source commit, `main`, version tag, Chromium ZIP, Firefox XPI, anonymous downloads, and publisher checkout agree byte-for-byte. Credential scanning and package allowlists run before publication.

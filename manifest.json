@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "fewerCunts",
-  "version": "4.5.0",
+  "version": "4.5.1",
   "description": "Filters blocked NTForum users and muted threads, with optional private full-forum search.",
   "icons": {
     "16": "icons/icon16.png",

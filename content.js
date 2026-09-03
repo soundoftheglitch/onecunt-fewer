@@ -11,6 +11,7 @@
   const NAVIGATE_EVENT = "fewercunts:navigate-to-post";
   const NAVIGATE_RESULT_EVENT = "fewercunts:navigate-to-post-result";
   const PRESENTED_EVENT = "fewercunts:presented-posts";
+  const PLUGIN_VIEW_READY_EVENT = "fewercunts:plugin-view-ready";
   const IDENTITY_EVENT = "fewercunts:forum-identity";
   const IDENTITY_REQUEST_EVENT = "fewercunts:forum-identity-request";
   const BACKFILL_EVENT = "fewercunts:blocked-thread-backfill";
@@ -90,6 +91,9 @@
   if (document.getElementById("theforum")) requestAnimationFrame(() => setStartupProgress(10));
   else startingObserver.observe(document.documentElement, { childList: true, subtree: true });
   document.addEventListener(CLASSIC_READY_EVENT, () => { classicBridgeReady = true; setStartupProgress(65); });
+  document.addEventListener(PLUGIN_VIEW_READY_EVENT, () => {
+    if (initialPluginRoute) revealForum();
+  }, { once: true });
   setTimeout(revealForum, 180000);
 
   function findViewModel() {

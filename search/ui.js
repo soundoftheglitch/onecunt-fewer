@@ -16,6 +16,7 @@
   const CLASSIC_RESULT_EVENT = "fewercunts:classic-page-result";
   const CLASSIC_READY_EVENT = "fewercunts:classic-page-ready";
   const PRESENTED_EVENT = "fewercunts:presented-posts";
+  const PLUGIN_VIEW_READY_EVENT = "fewercunts:plugin-view-ready";
   const IDENTITY_EVENT = "fewercunts:forum-identity";
   const IDENTITY_REQUEST_EVENT = "fewercunts:forum-identity-request";
   const DEVELOPER_POLICY_EVENT = "fewercunts:developer-reply-policy";
@@ -1624,13 +1625,22 @@
       if (location.hash === "#unloved") return showUnloved().catch(error => showStatus(`Unloved error: ${error.message}`, "error"));
       if (location.pathname === "/") return showHome();
     }
+    function restoreInitialRoute() {
+      return Promise.resolve(restoreRoute()).finally(() => {
+        if (location.hash.includes("view=") && !results.hidden) {
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            document.dispatchEvent(new CustomEvent(PLUGIN_VIEW_READY_EVENT));
+          }));
+        }
+      });
+    }
     window.addEventListener("popstate", restoreRoute);
     Promise.all([send({ type: "fewercunts-search:block-list" }), send({ type: "fewercunts-search:muted-ids" })]).then(([value, ids]) => {
       const next = globalThis.FewerCuntsBlockList.validate(value.usernames);
       blockedUsernames = next; blockedKeys = new Set(next.map(globalThis.FewerCuntsBlockList.normalise));
       mutedIds = new Set(ids.map(Number)); publishVisibility();
-      restoreRoute();
-    }).catch(() => restoreRoute());
+      restoreInitialRoute();
+    }).catch(() => restoreInitialRoute());
     return true;
   }
 
