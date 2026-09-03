@@ -1,0 +1,79 @@
+{
+  "manifest_version": 3,
+  "name": "fewerCunts",
+  "version": "4.5.0",
+  "description": "Filters blocked NTForum users and muted threads, with optional private full-forum search.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "host_permissions": [
+    "https://ntforum.net/api/forum/*",
+    "https://raw.githubusercontent.com/soundoftheglitch/onecunt-fewer/*",
+    "https://github.com/soundoftheglitch/onecunt-fewer/releases/download/*",
+    "https://release-assets.githubusercontent.com/*",
+    "http://127.0.0.1:8767/*"
+  ],
+  "permissions": [
+    "alarms"
+  ],
+  "optional_permissions": [
+    "notifications"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://ntforum.net/*"
+      ],
+      "css": [
+        "starting.css"
+      ],
+      "js": [
+        "search/block-list.js",
+        "filter-engine.js",
+        "archive-engine.js",
+        "pagination-engine.js",
+        "navigation-highlight.js",
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://ntforum.net/*"
+      ],
+      "js": [
+        "local-settings-transfer.js",
+        "search/block-list.js",
+        "archive-engine.js",
+        "pagination-engine.js",
+        "navigation-highlight.js",
+        "navigation-state.js",
+        "recent-searches.js",
+        "about-content.js",
+        "safe-links.js",
+        "search/read-state.js",
+        "search/saved-state.js",
+      "search/categories.js",
+      "search/dom-lifecycle.js",
+      "search/category-ui.js",
+      "search/ui-response.js",
+      "search/ui-route.js",
+      "search/ui-elements.js",
+      "search/ui-unloved.js",
+      "search/ui-categories.js",
+      "search/ui.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Build local NTForum interaction dynamics analysis
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/x0ar/Worktrees/ntforum-publisher/scripts/analyse_forum_dynamics.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/x0ar/.local/state

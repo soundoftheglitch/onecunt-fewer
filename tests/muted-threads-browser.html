@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Muted thread persistence</title>
+<pre id="result">running</pre>
+<script src="../search/muted-threads.js"></script>
+<script>
+"use strict";
+(async () => {
+  await new Promise((resolve, reject) => { const request = indexedDB.deleteDatabase("fewercunts-muted-threads");
+    request.onsuccess = resolve; request.onerror = () => reject(request.error); request.onblocked = resolve; });
+  let tick = 0;
+  let repository = new FewerCuntsMutedThreads.MutedThreadRepository(indexedDB, 3,
+    () => `2026-09-01T00:00:0${++tick}Z`);
+  await repository.mute({ threadId: 1, title: "One", username: "alice", body: "must not persist", email: "x@y.invalid" });
+  await repository.mute({ threadId: 2, title: "Two", username: "bob" });
+  await repository.mute({ threadId: 1, title: "One updated", username: "alice" });
+  const deduplicated = await repository.list();
+  repository.promise = null; repository = new FewerCuntsMutedThreads.MutedThreadRepository(indexedDB, 3,
+    () => `2026-09-01T00:00:0${++tick}Z`);
+  const restarted = await repository.list();
+  await repository.mute({ threadId: 3, title: "Three" }); await repository.mute({ threadId: 4, title: "Four" });
+  const bounded = await repository.list();
+  const db = await repository.db(); const malformed = db.transaction("records", "readwrite");
+  malformed.objectStore("records").put({ threadId: 99, canonicalUrl: "https://example.test/thread/99", mutedUtc: "bad" });
+  await new Promise((resolve, reject) => { malformed.oncomplete = resolve; malformed.onerror = () => reject(malformed.error); });
+  const recovered = await repository.list();
+  await repository.remove(3); const removed = await repository.list();
+  await repository.clear(); const cleared = await repository.list();
+  const serialised = JSON.stringify(bounded.items);
+  const result = { pass: deduplicated.total === 2 && deduplicated.items.find(item => item.threadId === 1).mutedUtc === "2026-09-01T00:00:01Z"
+      && restarted.total === 2 && bounded.total === 3 && !bounded.items.some(item => item.threadId === 1)
+      && recovered.total === 3 && !recovered.items.some(item => item.threadId === 99)
+      && removed.total === 2 && cleared.total === 0 && !serialised.includes("must not persist") && !serialised.includes("x@y.invalid"),
+    deduplicated: deduplicated.total, restart: restarted.total, bounded: bounded.total,
+    malformedRecovered: recovered.total === 3, removed: removed.total, cleared: cleared.total };
+  document.getElementById("result").textContent = JSON.stringify(result);
+})().catch(error => { document.getElementById("result").textContent = JSON.stringify({ pass: false, error: error.stack }); });
+</script>

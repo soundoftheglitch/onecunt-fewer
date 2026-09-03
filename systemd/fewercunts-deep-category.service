@@ -1,0 +1,18 @@
+[Unit]
+Description=Resumable deep NTForum category campaign
+After=network-online.target ollama.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/x0ar/Worktrees/ntforum-publisher/scripts/deep_category_campaign.py
+ExecStartPost=/usr/bin/python3 /home/x0ar/Worktrees/ntforum-publisher/scripts/publish_category_database.py
+ExecStartPost=/usr/bin/python3 /home/x0ar/Worktrees/ntforum-publisher/scripts/analyse_forum_dynamics.py
+Restart=on-failure
+RestartSec=30
+TimeoutStartSec=infinity
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/x0ar/.local/state /home/x0ar/Archives/ntforum.net
+RestrictAddressFamilies=AF_INET AF_UNIX

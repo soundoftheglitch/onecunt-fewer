@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Persistent index browser lifecycle</title>
+<pre id="result">running</pre>
+<script src="../search/persistent-index-contract.js"></script>
+<script src="../search/persistent-index-storage.js"></script>
+<script src="../search/persistent-index-manager.js"></script>
+<script>
+"use strict";
+class MemoryCache {
+  constructor() { this.items = new Map(); }
+  key(value) { return value && value.url || String(value); }
+  async match(key) { const value = this.items.get(this.key(key)); return value && value.clone(); }
+  async put(key, value) { this.items.set(this.key(key), value.clone()); }
+  async delete(key) { return this.items.delete(this.key(key)); }
+  async keys() { return Array.from(this.items.keys(), url => new Request(url)); }
+}
+class MemoryCaches { constructor(value) { this.value = value; } async open() { return this.value; } }
+const metadata = (character, bytes, watermark) => ({ manifestSha256: character.repeat(64), watermark,
+  bytes, sha256: "f".repeat(64), documentCount: 2, termCount: 3,
+  source: { generationTag: `search-compact-v1-${character}`,
+    manifestUrl: "https://github.com/example/repo/releases/download/fixture/manifest.json" } });
+const opened = generation => ({ generationId: generation.generationId, watermark: generation.watermark,
+  documentCount: generation.documentCount, termCount: generation.termCount });
+(async () => {
+  const cache = new MemoryCache(); const cachesImpl = new MemoryCaches(cache);
+  const options = { cachesImpl, cryptoImpl: crypto, storageManager: { estimate: async () => ({ usage: 1, quota: 1e9 }) },
+    now: () => "2026-09-01T00:00:00Z" };
+  const first = new FewerCuntsPersistentIndexStorage.PersistentIndexStorage(options);
+  const generation = await first.writeGeneration(metadata("a", 4, "2026-09-01T00:00:00Z"),
+    new Uint8Array([1, 2, 3, 4]));
+  await first.activateGeneration(generation.generationId);
+
+  const restarted = new FewerCuntsPersistentIndexStorage.PersistentIndexStorage(options);
+  let downloads = 0; const reader = { open: async generationId => {
+    const record = await restarted.generation(generationId);
+    if (!record || !await restarted.hasGeneration(generationId)) throw new Error("unavailable");
+    return opened(record);
+  }};
+  const manager = new FewerCuntsPersistentIndexManager.PersistentIndexManager({ storage: restarted, reader,
+    downloader: { fetchPointer: async () => ({ manifestSha256: "a".repeat(64),
+      watermark: "2026-09-01T00:00:00Z" }), download: async () => { downloads += 1; throw new Error("must not download"); } } });
+  const startup = await manager.startup(); const unchanged = await manager.install();
+
+  let interrupted = false;
+  try {
+    await restarted.writeGeneration(metadata("b", 4, "2026-09-02T00:00:00Z"), (async function *() {
+      yield new Uint8Array([9, 9]); throw new Error("interrupted");
+    })());
+  } catch (error) { interrupted = error.message === "interrupted"; }
+  const removed = await restarted.cleanupAbandoned({ keepGenerationIds: [generation.generationId] });
+  const after = await restarted.activePointer();
+  const keys = await cache.keys();
+  const result = { pass: startup.phase === "ready" && unchanged.result === "unchanged" && downloads === 0
+    && interrupted && removed.some(id => id.endsWith("b".repeat(64))) && after.generationId === generation.generationId,
+    restartReady: startup.phase === "ready", downloads, interrupted, abandonedRemoved: removed.length,
+    activePreserved: after.generationId === generation.generationId,
+    chunkCount: keys.filter(item => item.url.endsWith(".bin")).length,
+    indexedDbTouched: false };
+  document.getElementById("result").textContent = JSON.stringify(result);
+})().catch(error => { document.getElementById("result").textContent = JSON.stringify({ pass: false, error: error.stack }); });
+</script>

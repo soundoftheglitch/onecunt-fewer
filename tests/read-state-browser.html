@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Unread state browser persistence</title>
+<pre id="result">running</pre>
+<script src="../search/read-state.js"></script>
+<script>
+"use strict";
+(async () => {
+  await new Promise((resolve, reject) => { const request = indexedDB.deleteDatabase("fewercunts-read-state");
+    request.onsuccess = resolve; request.onerror = () => reject(request.error); request.onblocked = resolve; });
+  const make = (key, threadId, body, parent = null, created = "2026-09-01T10:00:00Z") => ({
+    docKey: key, threadId, postId: Number(key.split(":")[1]), parentPostId: parent, kind: key[0],
+    username: "allowed", title: `Thread ${threadId}`, body, createdUtc: created,
+    canonicalUrl: `https://ntforum.net/thread/${threadId}${key[0] === "r" ? `/reply/${key.split(":")[1]}` : ""}` });
+  const root = make("t:1", 1, "root"); const visible = make("r:2", 1, "reply", 1);
+  let repository = new FewerCuntsReadState.ReadStateRepository(indexedDB, 4);
+  const baseline = await repository.refresh([root, visible]);
+  repository.promise = null; repository = new FewerCuntsReadState.ReadStateRepository(indexedDB, 4);
+  const restarted = await repository.refresh([root, visible]);
+  const newReply = make("r:3", 1, "new", 2, "2026-09-01T11:00:00Z");
+  const partial = await repository.refresh([root, visible, newReply]);
+  const firstUnread = (await repository.unread()).firstUnread;
+  await repository.mark({ docKeys: ["r:3"] });
+  const reopened = await repository.refresh([root, visible, { ...newReply, body: "edited", parentPostId: 1 }]);
+  const removed = await repository.refresh([root, visible]);
+  const another = make("r:4", 1, "another", 1, "2026-09-01T12:00:00Z");
+  await repository.refresh([root, visible, another]); await repository.mark({ threadId: 1 });
+  const threadRead = await repository.summary();
+  const exactRoot = make("t:2", 2, "exact root");
+  const visibleReplies = Array.from({ length: 9 }, (_, index) => make(`r:${20 + index}`, 2,
+    `visible reply ${index}`, 2, `2026-09-01T${String(13 + index).padStart(2, "0")}:00:00Z`));
+  repository = new FewerCuntsReadState.ReadStateRepository(indexedDB, 20);
+  await repository.refresh([exactRoot, ...visibleReplies]); // The blocked tenth reply is absent from the visible set.
+  await repository.mark({ docKeys: [exactRoot.docKey, ...visibleReplies.slice(0, 7).map(reply => reply.docKey)] });
+  const blockedPartial = (await repository.summary()).threads.find(thread => thread.threadId === 2);
+  await repository.mark({ threadId: 2 });
+  const blockedAllRead = (await repository.summary()).threads.find(thread => thread.threadId === 2);
+  const laterVisible = make("r:29", 2, "arrived later", 2, "2026-09-02T01:00:00Z");
+  await repository.refresh([exactRoot, ...visibleReplies, laterVisible]);
+  const reopenedByArrival = (await repository.summary()).threads.find(thread => thread.threadId === 2);
+  repository = new FewerCuntsReadState.ReadStateRepository(indexedDB, 4);
+  await repository.refresh(Array.from({ length: 7 }, (_, index) => make(`r:${10 + index}`, 3, `bounded ${index}`, 3,
+    `2026-09-01T${String(13 + index).padStart(2, "0")}:00:00Z`)));
+  const bounded = (await repository.records()).length;
+  await repository.mark({ all: true });
+  const resetKeys = (await repository.records()).map(record => record.docKey);
+  const reset = await repository.markAllUnread(resetKeys); const resetMarked = (await repository.records()).length;
+  repository.promise = null; repository = new FewerCuntsReadState.ReadStateRepository(indexedDB, 4);
+  const resetAfterRestart = await repository.summary();
+  const historical = make("r:99", 4, "historical presented after reset", 4, "2025-01-01T00:00:00Z");
+  const materializedUnread = await repository.upsert([historical]);
+  const materializedRead = await repository.mark({ docKeys: [historical.docKey] });
+  const clearedReset = await repository.mark({ all: true });
+  const result = { pass: baseline.total === 0 && restarted.total === 0 && partial.total === 1
+      && firstUnread.docKey === "r:3" && reopened.total === 1 && removed.total === 0 && threadRead.total === 0
+      && blockedPartial.totalCount === 10 && blockedPartial.unreadCount === 2
+      && blockedAllRead.unreadCount === 0 && reopenedByArrival.unreadCount === 1 && bounded === 4
+      && resetMarked === 4 && reset.total === 4 && reset.allUnread && resetAfterRestart.total === 4
+      && resetAfterRestart.allUnread && materializedUnread.unreadDocKeys.includes("r:99")
+      && materializedRead.readDocKeys.includes("r:99") && !clearedReset.allUnread,
+    baseline: baseline.total, restart: restarted.total, partial: partial.total,
+    firstUnread: firstUnread.docKey, editedReparented: reopened.total, deleted: removed.total,
+    threadRead: threadRead.total, visibleDocumentCount: blockedPartial.totalCount,
+    visibleUnreadAfterSevenRead: blockedPartial.unreadCount, allVisibleRead: blockedAllRead.unreadCount,
+    newVisibleReplyUnread: reopenedByArrival.unreadCount, bounded,
+    resetMarked, resetUnread: reset.total, resetRestart: resetAfterRestart.total,
+    globalReset: reset.allUnread, materializedUnread: materializedUnread.unreadDocKeys.includes("r:99"),
+    materializedRead: materializedRead.readDocKeys.includes("r:99"), resetCleared: !clearedReset.allUnread };
+  document.getElementById("result").textContent = JSON.stringify(result);
+})().catch(error => { document.getElementById("result").textContent = JSON.stringify({ pass: false, error: error.stack }); });
+</script>

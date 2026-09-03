@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8"><title>categories</title><pre id="result">running</pre>
+<script src="../search/categories.js"></script><script>
+(async () => {
+  indexedDB.deleteDatabase(FewerCuntsCategories.DB_NAME);
+  const base = { version: 1, threads: { "7": "sports/football", "8": "music-audio/artists-releases" } };
+  const repo = new FewerCuntsCategories.CategoryRepository(indexedDB, async () => base);
+  let values = await repo.get([{ docKey: "t:7", threadId: 7 }, { docKey: "r:70", threadId: 7 }]);
+  if (values[0].categoryId !== "sports/football" || values[1].categoryId !== "sports/football") throw Error("baseline inheritance");
+  await repo.set("t:7", 7, "sports/football/mens");
+  values = await repo.get([{ docKey: "r:70", threadId: 7 }]);
+  if (values[0].categoryId !== "sports/football/mens" || values[0].source !== "thread-manual") throw Error("thread override inheritance");
+  await repo.set("r:70", 7, "sports/tennis/mixed");
+  values = await repo.get([{ docKey: "r:70", threadId: 7 }]);
+  if (values[0].categoryId !== "sports/tennis/mixed" || values[0].source !== "manual") throw Error("reply override");
+  await repo.inherit("r:70", 7);
+  values = await repo.get([{ docKey: "r:70", threadId: 7 }]);
+  if (values[0].categoryId !== "sports/football/mens") throw Error("restore inheritance");
+  document.querySelector("#result").textContent = "PASS";
+})().catch(error => { document.querySelector("#result").textContent = `FAIL ${error.stack}`; });
+</script>

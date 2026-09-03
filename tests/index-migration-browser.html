@@ -1,0 +1,36 @@
+<!doctype html><meta charset="utf-8"><title>Index migration browser lifecycle</title>
+<script src="../search/index-migration.js"></script>
+<script>
+window.result = (async () => {
+  await new Promise((resolve, reject) => { const request = indexedDB.deleteDatabase("fewercunts-index-control");
+    request.onsuccess = resolve; request.onerror = () => reject(request.error); });
+  const active = { generationId: "v1-browser", watermark: "2026-09-01T00:00:00Z" };
+  const manager = { installs: 0, ready: false,
+    startup: async function () { return this.ready ? { phase: "ready", active } : { phase: "empty" }; },
+    install: async function () { this.installs += 1; this.ready = true; return { phase: "ready", active }; } };
+  const legacy = { retired: 0, getSync: async () => ({ phase: "complete", schemaVersion: 3 }),
+    getSettings: async () => ({ enabled: true }), migrationSnapshot: async () => [{ thread: { threadId: 9 } }],
+    migrationThread: async () => ({ thread: { threadId: 9 }, replies: [] }),
+    retireSearchPostings: async function () { this.retired += 1; } };
+  const delta = { ids: [], replaceThread: async function (thread) { this.ids.push(thread.threadId); } };
+  const compiledQuery = { search: async () => ({ items: [{}], total: 12 }) };
+  const firstState = new FewerCuntsIndexMigration.MigrationStateRepository(indexedDB);
+  const first = new FewerCuntsIndexMigration.IndexMigrationCoordinator({ state: firstState, legacy,
+    compactManager: manager, compiledQuery, delta });
+  const migrated = await first.run();
+  const restartedState = new FewerCuntsIndexMigration.MigrationStateRepository(indexedDB);
+  const restarted = new FewerCuntsIndexMigration.IndexMigrationCoordinator({ state: restartedState, legacy,
+    compactManager: manager, compiledQuery, delta });
+  const reopened = await restarted.run();
+  await restarted.clear();
+  const spotlessState = new FewerCuntsIndexMigration.MigrationStateRepository(indexedDB);
+  const afterClear = await spotlessState.get();
+  const clearRestart = new FewerCuntsIndexMigration.IndexMigrationCoordinator({ state: spotlessState, legacy,
+    compactManager: manager, compiledQuery, delta });
+  const cleared = await clearRestart.run();
+  return { pass: migrated.phase === "complete" && reopened.phase === "complete" && cleared.phase === "cleared"
+      && manager.installs === 1 && legacy.retired === 1 && delta.ids.join() === "9" && afterClear.cleared,
+    migrated: migrated.phase, reopened: reopened.phase, cleared: cleared.phase,
+    installs: manager.installs, retired: legacy.retired, copied: delta.ids };
+})().catch(error => ({ pass: false, error: String(error && error.stack || error) }));
+</script>

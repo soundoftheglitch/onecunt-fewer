@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Saved thread persistence</title>
+<pre id="result">running</pre>
+<script src="../search/saved-state.js"></script>
+<script>
+"use strict";
+(async () => {
+  await new Promise((resolve, reject) => { const request = indexedDB.deleteDatabase("fewercunts-saved-threads");
+    request.onsuccess = resolve; request.onerror = () => reject(request.error); request.onblocked = resolve; });
+  let tick = 0;
+  let repository = new FewerCuntsSavedState.SavedThreadRepository(indexedDB, 3,
+    () => `2026-09-01T00:00:0${++tick}Z`);
+  await repository.save({ threadId: 1, title: "One", username: "alice", body: "must not persist", email: "x@y.invalid" });
+  await repository.save({ threadId: 2, title: "Two", username: "bob" });
+  await repository.save({ threadId: 1, title: "One updated", username: "alice" });
+  const deduplicated = await repository.list();
+  repository.promise = null; repository = new FewerCuntsSavedState.SavedThreadRepository(indexedDB, 3,
+    () => `2026-09-01T00:00:0${++tick}Z`);
+  const restarted = await repository.list();
+  await repository.save({ threadId: 3, title: "Three" }); await repository.save({ threadId: 4, title: "Four" });
+  const bounded = await repository.list(); const exported = await repository.exportRecords();
+  await repository.remove(3); const removed = await repository.list();
+  await repository.clear(); const cleared = await repository.list();
+  const keys = Object.keys(exported[0] || {}).sort();
+  const result = { pass: deduplicated.total === 2 && deduplicated.items.find(item => item.threadId === 1).savedUtc === "2026-09-01T00:00:01Z"
+      && restarted.total === 2 && bounded.total === 3 && !bounded.items.some(item => item.threadId === 1)
+      && removed.total === 2 && cleared.total === 0 && !JSON.stringify(exported).includes("must not persist")
+      && !JSON.stringify(exported).includes("x@y.invalid"), deduplicated: deduplicated.total, restart: restarted.total,
+    bounded: bounded.total, oldestTrimmed: !bounded.items.some(item => item.threadId === 1), removed: removed.total,
+    cleared: cleared.total, exportKeys: keys };
+  document.getElementById("result").textContent = JSON.stringify(result);
+})().catch(error => { document.getElementById("result").textContent = JSON.stringify({ pass: false, error: error.stack }); });
+</script>

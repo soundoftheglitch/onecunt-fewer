@@ -1,0 +1,108 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>NTForum blocker browser test</title>
+<style>
+body { background: #ff0000; }
+body[data-test-status="pass"] { background: #00ff00; }
+</style>
+<script src="../filter-engine.js"></script>
+<body data-test-status="running"></body>
+<script>
+(function () {
+  "use strict";
+
+  function observable(initialValue) {
+    let value = initialValue;
+    const subscribers = [];
+    function result(nextValue) {
+      if (arguments.length) {
+        value = nextValue;
+        subscribers.slice().forEach(function (subscriber) { subscriber(value); });
+        return result;
+      }
+      return value;
+    }
+    result.subscribe = function (subscriber) { subscribers.push(subscriber); };
+    return result;
+  }
+
+  function reply(id, author, children) {
+    return {
+      id: observable(id),
+      postedByUsername: observable(author),
+      replies: observable(children || []),
+      isSelected: observable(false)
+    };
+  }
+
+  function thread(id, author, replies) {
+    return {
+      id: observable(id),
+      postedByUsername: observable(author),
+      replies: observable(replies || []),
+      isExpanded: observable(false),
+      isSelected: observable(false)
+    };
+  }
+
+  function check(condition, message) {
+    if (!condition) {
+      throw new Error(message);
+    }
+  }
+
+  try {
+    const hiddenDescendant = reply(4, "Charlie");
+    const blockedReply = reply(3, " Soulisdead ", [hiddenDescendant]);
+    const visibleReply = reply(2, "Alice", [blockedReply, reply(5, "Dana")]);
+    const allowedThread = thread(10, "Alice", [visibleReply]);
+    const blockedThread = thread(11, "sOuLiSdEaD", [reply(6, "Bob")]);
+    const vm = {
+      threads: observable([blockedThread, allowedThread]),
+      selectedPost: observable(hiddenDescendant),
+      expandedThread: observable(blockedThread)
+    };
+    hiddenDescendant.isSelected(true);
+    blockedThread.isExpanded(true);
+
+    const filter = NtForumBlockerEngine.createFilter({
+      targetUsernames: ["Soulisdead", "monkeybutler"]
+    });
+    filter.attach(vm);
+
+    check(vm.threads().length === 1 && vm.threads()[0] === allowedThread, "blocked thread remained");
+    check(visibleReply.replies().length === 1 && visibleReply.replies()[0].id() === 5, "blocked reply subtree remained");
+    check(vm.selectedPost() === undefined, "hidden selection remained");
+    check(vm.expandedThread() === undefined, "hidden expansion remained");
+
+    allowedThread.replies([reply(7, "Soulisdead", [reply(8, "Eve")]), reply(9, "Frank")]);
+    check(allowedThread.replies().length === 1 && allowedThread.replies()[0].id() === 9, "late reply filtering failed");
+
+    vm.threads([thread(12, "Soulisdead"), allowedThread]);
+    check(vm.threads().length === 1 && vm.threads()[0] === allowedThread, "late thread filtering failed");
+
+    allowedThread.replies([reply(13, "MonkeyButler", [reply(14, "Grace")]), reply(15, "Heidi")]);
+    check(allowedThread.replies().length === 1 && allowedThread.replies()[0].id() === 15, "second blocked user's reply remained");
+
+    vm.threads([thread(16, " monkeybutler "), allowedThread]);
+    check(vm.threads().length === 1 && vm.threads()[0] === allowedThread, "second blocked user's thread remained");
+
+    const mutedThread = thread(20, "Alice", [reply(21, "Bob")]);
+    const mutedVm = { threads: observable([mutedThread, allowedThread]), selectedPost: observable(), expandedThread: observable() };
+    const mutedFilter = NtForumBlockerEngine.createFilter({ targetThreadIds: [20] }); mutedFilter.attach(mutedVm);
+    check(mutedVm.threads().length === 1 && mutedVm.threads()[0] === allowedThread, "muted thread remained");
+    mutedFilter.setVisibility({ revealHidden: true });
+    check(mutedVm.threads().length === 2 && mutedVm.threads()[0] === mutedThread, "temporary reveal did not restore muted root and replies");
+    mutedFilter.setVisibility({ revealHidden: false });
+    check(mutedVm.threads().length === 1 && mutedVm.threads()[0] === allowedThread, "hide again changed the muted set");
+    mutedFilter.setVisibility({ targetThreadIds: [] });
+    check(mutedVm.threads().length === 2 && mutedThread.replies().length === 1, "unmute did not restore the complete thread");
+
+    document.body.dataset.testStatus = "pass";
+    document.body.textContent = JSON.stringify({ result: "pass", checks: 12 });
+  } catch (error) {
+    document.body.dataset.testStatus = "fail";
+    document.body.textContent = error.stack || String(error);
+  }
+})();
+</script>

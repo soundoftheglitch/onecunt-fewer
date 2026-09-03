@@ -1,0 +1,40 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const test = require("node:test");
+
+const content = fs.readFileSync("content.js", "utf8");
+const css = fs.readFileSync("starting.css", "utf8");
+
+test("startup loader is a real monotonic progress element with bounded fail-open", () => {
+  assert.match(content, /document\.createElement\("progress"\)/);
+  assert.match(content, /progress\.value = 0/);
+  assert.doesNotMatch(content, /document\.createElement\("output"\)/);
+  assert.match(content, /Math\.max\(startupProgress/);
+  assert.match(content, /setTimeout\(revealForum, 180000\)/);
+  assert.doesNotMatch(content, /setTimeout\(revealForum, 6500\)/);
+  assert.match(content, /requestAnimationFrame\(\(\) => requestAnimationFrame/);
+  assert.match(content, /\}\)\), 240\)/);
+  assert.match(content, /setTimeout\(\(\) => finish\(false\), 150000\)/);
+  for (const phase of [10, 25, 40, 55, 65, 70, 90, 100]) assert.match(content, new RegExp(`StartupProgress\\(${phase}\\)`));
+  assert.match(content, /CLASSIC_READY_EVENT/);
+  assert.match(content, /if \(startupReleased\) return null/);
+  assert.match(content, /loadInitialClassic/);
+  assert.match(content, /initialClassicAttempts < 90/);
+  assert.match(content, /setTimeout\(loadInitialClassic, 2000\)/);
+  assert.match(content, /waitForClassicPresentation/);
+  assert.match(content, /stableFrames >= 2/);
+  assert.match(content, /JSON\.stringify\(renderedIds\) === JSON\.stringify\(viewIds\)/);
+  assert.match(content, /rowsControl\?\.element\?\.isConnected/);
+  assert.match(content, /fewercunts-density-scroll/);
+  assert.match(fs.readFileSync("scripts/verify_startup_loader_chromium.py", "utf8"), /paintedBeforeRelease/);
+  assert.match(content, /startupLoader\.overlay\.remove\(\);[\s\S]*root\.classList\.remove\(STARTING_CLASS\)/);
+  assert.match(css, /\.fewercunts-startup-progress::-webkit-progress-value/);
+  assert.match(css, /#theforum > :not\(\.fewercunts-startup-loader\)/);
+  assert.match(css.match(/\.fewercunts-startup-loader \{[^}]+\}/)?.[0] || "", /position:fixed/);
+  assert.match(css, /html\.fewercunts-starting body \{ height:100%; overflow:hidden !important; \}/);
+  assert.match(css, /html\.fewercunts-starting body \{ inset:0; position:fixed; width:100%; \}/);
+  assert.doesNotMatch(content, /startup-loader--forum/);
+  assert.match(css, /prefers-reduced-motion:reduce/);
+  assert.doesNotMatch(css, /fewercunts-startup-percent/);
+  assert.doesNotMatch(content, /Loading (?:the )?forum|Preparing database|Please wait/i);
+});

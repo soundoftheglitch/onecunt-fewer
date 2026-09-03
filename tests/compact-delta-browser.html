@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Compact delta browser persistence</title>
+<pre id="result">running</pre>
+<script src="../search/indexer.js"></script>
+<script src="../search/compact-delta.js"></script>
+<script>
+"use strict";
+(async () => {
+  await new Promise((resolve, reject) => { const request = indexedDB.deleteDatabase("fewercunts-compact-delta");
+    request.onsuccess = resolve; request.onerror = () => reject(request.error); request.onblocked = resolve; });
+  const make = () => new FewerCuntsCompactDelta.CompactDeltaRepository(indexedDB);
+  const repository = make();
+  const thread = FewerCuntsIndexer.sanitiseThread({ Id: 77, Title: "Recent artisinal", Message: "fresh local delta",
+    PostedByUsername: "dog hat", PostedByEmailAddress: "private@example.test",
+    CreatedDateTimeUtc: "2026-08-31T20:00:00Z", LastPostDateTimeUtc: "2026-08-31T20:00:00Z", PostCount: 1 });
+  await repository.replaceThread(thread, []);
+  await repository.putState({ phase: "idle", lastSuccessUtc: "2026-08-31T20:01:00Z", pending: [], pendingRemovals: [] });
+  repository.promise = null;
+  const restarted = make();
+  const results = await restarted.search("artisinal", ["post"]);
+  const privateResults = await restarted.search("email:private@example.test", ["user"]);
+  const navigation = await restarted.navigationTarget("t:77");
+  await restarted.deleteThread(77);
+  restarted.promise = null;
+  const afterDelete = make();
+  const tombstones = await afterDelete.tombstonedThreadIds();
+  const result = { pass: results.length === 1 && privateResults.length === 1
+    && navigation.thread.Id === 77 && tombstones[0] === 77,
+    restartDocuments: results.length, privateEmailLocal: privateResults.length,
+    navigationThread: navigation.thread.Id, persistentTombstones: tombstones.length };
+  document.getElementById("result").textContent = JSON.stringify(result);
+})().catch(error => { document.getElementById("result").textContent = JSON.stringify({ pass: false, error: error.stack }); });
+</script>

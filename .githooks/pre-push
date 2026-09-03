@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+release_kind=${FEWERCUNTS_UPDATE_KIND:-}
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main|refs/tags/v*)
+      if [ -z "$release_kind" ]; then
+        echo "Push rejected: set FEWERCUNTS_UPDATE_KIND=initial, bugfix, minor, or major for main/version releases." >&2
+        exit 1
+      fi
+      python3 scripts/security_gate.py --revision "$local_sha" --since "$remote_sha" --release-packages
+      python3 scripts/semver_gate.py --kind "$release_kind" --revision "$local_sha"
+      ;;
+  esac
+done

@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+dist/fewerCunts-2.0.0.14.zip
+dist/fewerCunts-2.0.0.15.zip
+dist/fewerCunts-2.0.0.16.zip
+dist/fewercunts-search-*.json
+dist/fewercunts-search-*.ndjson.gz

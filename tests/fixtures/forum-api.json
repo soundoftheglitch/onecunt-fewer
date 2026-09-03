@@ -1,0 +1,49 @@
+{
+  "catalogue": {
+    "PageNumber": 1,
+    "ThreadCount": 2,
+    "Threads": [
+      {
+        "Id": 101,
+        "Title": "The best way to poach an egg",
+        "Message": "Keep the water below a rolling boil.",
+        "PostedByUsername": "Alice",
+        "PostedByEmailAddress": "alice@example.invalid",
+        "CreatedDateTimeUtc": "2026-08-01T10:00:00Z",
+        "LastPostDateTimeUtc": "2026-08-02T12:00:00Z",
+        "PostCount": 3
+      },
+      {
+        "Id": 102,
+        "Title": "Unicode and punctuation — café records",
+        "Message": "A deliberately searchable second thread.",
+        "PostedByUsername": "Bob",
+        "CreatedDateTimeUtc": "2026-08-03T10:00:00Z",
+        "LastPostDateTimeUtc": "2026-08-03T10:00:00Z",
+        "PostCount": 1
+      }
+    ]
+  },
+  "replies": [
+    {
+      "Id": 201,
+      "ThreadId": 101,
+      "Title": "Re: The best way to poach an egg",
+      "Message": "A <script>alert('never execute this')</script> reply.",
+      "PostedByUsername": "Carol",
+      "PostedByEmailAddress": "carol@example.invalid",
+      "CreatedDateTimeUtc": "2026-08-02T11:00:00Z",
+      "Replies": [
+        {
+          "Id": 202,
+          "ThreadId": 101,
+          "Title": "Re: The best way to poach an egg",
+          "Message": "Nested reply with the exact phrase “soft yolk”.",
+          "PostedByUsername": "Dave",
+          "CreatedDateTimeUtc": "2026-08-02T12:00:00Z",
+          "Replies": []
+        }
+      ]
+    }
+  ]
+}

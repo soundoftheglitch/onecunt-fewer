@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8"><title>Notification state persistence</title><pre id="result">running</pre>
+<script src="../search/notification-state.js"></script>
+<script>
+"use strict";
+(async () => {
+  await new Promise((resolve, reject) => { const request = indexedDB.deleteDatabase("fewercunts-notification-state");
+    request.onsuccess = resolve; request.onerror = () => reject(request.error); request.onblocked = resolve; });
+  const make = (key, threadId, author, parent = null) => ({ docKey: key, kind: key[0], threadId,
+    postId: Number(key.slice(2)), parentPostId: parent, username: author, title: `Thread ${threadId}`,
+    threadTitle: `Thread ${threadId}`, body: `Body ${key}`, createdUtc: `2026-09-01T00:00:${String(Number(key.slice(2))).padStart(2,"0")}Z`,
+    canonicalUrl: `https://ntforum.net/thread/${threadId}/reply/${key.slice(2)}` });
+  const root = { ...make("t:1", 1, "dog hat"), canonicalUrl: "https://ntforum.net/thread/1" };
+  const old = make("r:2", 1, "alice", 1); const fresh = make("r:3", 1, "bob", 1);
+  let repository = new FewerCuntsNotificationState.NotificationRepository(indexedDB, 2);
+  const beforeConsent = await repository.reconcile([root, old]);
+  await repository.settings({ enabled: true, username: "Dog Hat", browser: false });
+  const baseline = await repository.reconcile([root, old], { baseline: true });
+  const detected = await repository.reconcile([root, old, fresh]);
+  const duplicate = await repository.reconcile([root, old, fresh]);
+  await repository.update("r:3", { read: true });
+  repository.promise = null; repository = new FewerCuntsNotificationState.NotificationRepository(indexedDB, 2);
+  const restarted = await repository.list();
+  const offlinePreserved = JSON.stringify(restarted) === JSON.stringify(await repository.list());
+  await repository.update("r:3", { dismissed: true }); const dismissed = await repository.list();
+  const stored = JSON.stringify(await repository.list({ includeDismissed: true }));
+  const result = { pass: beforeConsent.total === 0 && baseline.total === 0 && detected.created[0] === "r:3"
+      && duplicate.total === 0 && restarted.length === 1 && restarted[0].read === true && offlinePreserved && dismissed.length === 0
+      && !stored.includes("email") && !stored.includes("token"),
+    beforeConsent: beforeConsent.total, baseline: baseline.total, detected: detected.created,
+    duplicate: duplicate.total, restartRead: restarted[0]?.read, offlinePreserved,
+    dismissed: dismissed.length, privacy: true };
+  document.getElementById("result").textContent = JSON.stringify(result);
+})().catch(error => { document.getElementById("result").textContent = JSON.stringify({ pass:false,error:error.stack }); });
+</script>
