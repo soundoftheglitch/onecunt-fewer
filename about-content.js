@@ -27,6 +27,7 @@
   ]);
 
   const HISTORY = Object.freeze([
+    ["4.5.2", "2026-09-04", "Replaced the technical README with a beginner-first installation, verification, recovery, update, privacy and uninstall guide."],
     ["4.5.1", "2026-09-03", "Plugin deep links now reveal only after their rendered view is ready instead of remaining behind the Classic startup mask."],
     ["4.5.0", "2026-09-03", "Clean first release with the refactored signed catalogue, modular UI lifecycle, local search, categories and privacy boundary."]
   ]);

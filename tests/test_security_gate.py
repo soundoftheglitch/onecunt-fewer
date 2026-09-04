@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import io
+import json
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -10,6 +12,8 @@ import zipfile
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from security_gate import (SecurityGateError, findings, release_packages,
                            scan_package, verify)  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class SecurityGateTests(unittest.TestCase):
@@ -37,8 +41,11 @@ class SecurityGateTests(unittest.TestCase):
 
     def test_release_packages_are_derived_from_revision_manifest(self):
         packages = release_packages("HEAD")
+        version = json.loads(subprocess.run(
+            ["git", "show", "HEAD:manifest.json"], cwd=ROOT, check=True,
+            capture_output=True, text=True).stdout)["version"]
         self.assertEqual([item.name for item in packages],
-                         ["fewerCunts-4.5.0.zip", "fewerCunts-firefox-4.5.0.xpi"])
+                         [f"fewerCunts-{version}.zip", f"fewerCunts-firefox-{version}.xpi"])
 
     def test_archive_reports_metadata_not_secret_contents(self):
         with tempfile.TemporaryDirectory() as directory:

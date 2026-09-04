@@ -1,6 +1,6 @@
 # Optional forum search architecture
 
-Status: 4.5.1 refactored Chromium and Firefox implementation
+Status: 4.5.2 refactored Chromium and Firefox implementation
 
 ## Release rule
 
