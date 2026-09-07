@@ -9,7 +9,10 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import resource
+try:
+    import resource
+except ImportError:  # Windows has no POSIX resource module.
+    resource = None
 import sqlite3
 import subprocess
 import tempfile
@@ -121,8 +124,9 @@ def compile_index(source: Path, output: Path, signing_key: Path, chunk_bytes: in
     _openssl(["pkeyutl", "-sign", "-rawin", "-inkey", str(signing_key), "-in", str(manifest_path), "-out", str(signature_path)])
     # Volatile measurements are deliberately outside the signed release set so
     # two builds from identical input remain byte-identical.
+    peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss if resource else None
     report = {"seconds": round(time.perf_counter() - started, 3),
-              "peakRssKiB": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+              "peakRssKiB": peak_rss,
               "rawBytes": len(binary), "compressedBytes": len(compressed)}
     (output / "build-report.json").write_bytes(manifest_json(report))
     return manifest

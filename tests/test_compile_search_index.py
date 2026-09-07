@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 from compile_search_index import _validated_source, compile_index, verify_release  # noqa: E402
 
 
+@unittest.skipIf(shutil.which("openssl") is None, "OpenSSL command is required")
 class CompilerTest(unittest.TestCase):
     def setUp(self):
         self.temp = Path(tempfile.mkdtemp())

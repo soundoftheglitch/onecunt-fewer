@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import subprocess
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,12 +23,12 @@ def main() -> None:
     arguments = parser.parse_args()
 
     run("node", "--test", *sorted(str(path.relative_to(ROOT)) for path in (ROOT / "tests").glob("*.test.js")))
-    run("python3", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py")
-    run("python3", "scripts/validate_store.py")
-    run("python3", "scripts/validate_firefox.py")
-    run("python3", "scripts/security_gate.py", "--revision", "HEAD", "--release-packages")
+    run(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py")
+    run(sys.executable, "scripts/validate_store.py")
+    run(sys.executable, "scripts/validate_firefox.py")
+    run(sys.executable, "scripts/security_gate.py", "--revision", "HEAD", "--release-packages")
     if arguments.release:
-        run("python3", "scripts/verify.py")
+        run(sys.executable, "scripts/verify.py")
 
 
 if __name__ == "__main__":

@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class BeginnerReadmeTests(unittest.TestCase):
     def setUp(self):
-        self.readme = (ROOT / "README.md").read_text()
-        self.version = json.loads((ROOT / "manifest.json").read_text())["version"]
+        self.readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.version = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))["version"]
 
     def test_downloads_match_the_current_release(self):
         expected = {
@@ -47,7 +47,7 @@ class BeginnerReadmeTests(unittest.TestCase):
                 self.assertTrue((ROOT / target).is_file(), target)
 
     def test_version_five_requires_a_verified_beginner_installer(self):
-        strategy = (ROOT / "docs/v5-installation-strategy.md").read_text()
+        strategy = (ROOT / "docs/v5-installation-strategy.md").read_text(encoding="utf-8")
         for phrase in ("Do not publish v5", "Chrome Web Store", "Mozilla-signed Firefox",
                        "automatic update", "clean profile"):
             self.assertIn(phrase, strategy)

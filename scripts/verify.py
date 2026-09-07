@@ -17,6 +17,20 @@ USER_AGENT = "fewercunts-verification/1.0"
 MONKEYBUTLER_LIVE_THREAD_ID = 2647
 
 
+def chromium_binary() -> str:
+    configured = os.environ.get("CHROMIUM_BINARY")
+    candidates = [configured] if configured else []
+    candidates.extend(filter(None, (shutil.which("chromium"), shutil.which("chrome-for-testing"))))
+    for candidate in candidates:
+        path = Path(candidate).expanduser()
+        if path.is_file():
+            return str(path)
+    raise RuntimeError(
+        "Chromium or Chrome for Testing is required. Set CHROMIUM_BINARY to its executable. "
+        "Ordinary Google Chrome 137+ no longer supports --load-extension."
+    )
+
+
 def get_json(url: str):
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request, timeout=30) as response:
@@ -30,9 +44,7 @@ def descendants(items):
 
 
 def chromium_dump(url: str, *, extension: bool) -> str:
-    chromium = shutil.which("chromium") or shutil.which("google-chrome")
-    if not chromium:
-        raise RuntimeError("Chromium or Google Chrome is required for verification")
+    chromium = chromium_binary()
 
     with tempfile.TemporaryDirectory(prefix="ntforum-blocker-test-") as profile:
         command = [

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Unit tests for the local administrative publisher allowlist."""
 
+import os
 from pathlib import Path
 import sys
 import unittest
@@ -10,7 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from publisher_guard import (DEFAULT_BRANCH, GITHUB_LOGIN, PublisherPolicyError, REPOSITORY,
                              preflight, validate_checkout_path, validate_release_target)  # noqa: E402
 import publisher_guard  # noqa: E402
-import publish_compact_search_index as compact_publisher  # noqa: E402
+if os.name != "nt":
+    import publish_compact_search_index as compact_publisher  # noqa: E402
 
 
 class PublisherGuardTests(unittest.TestCase):
@@ -29,6 +31,7 @@ class PublisherGuardTests(unittest.TestCase):
         self.assertEqual(REPOSITORY, "soundoftheglitch/onecunt-fewer")
         self.assertEqual(DEFAULT_BRANCH, "main")
 
+    @unittest.skipIf(os.name == "nt", "publisher authorization is Linux-only")
     def test_preflight_rejects_wrong_account_repository_and_origin(self):
         def runner(account=GITHUB_LOGIN, repository=REPOSITORY,
                    origin=f"https://github.com/{REPOSITORY}.git", branch="main",
@@ -54,6 +57,7 @@ class PublisherGuardTests(unittest.TestCase):
         with patch.object(publisher_guard, "validate_checkout_path"):
             self.assertEqual(preflight(runner=runner(), effective_uid=1000)["result"], "authorized")
 
+    @unittest.skipIf(os.name == "nt", "publisher authorization is Linux-only")
     def test_preflight_rejects_a_dirty_publisher_checkout(self):
         def execute(*arguments):
             if arguments[:3] == ("gh", "api", "user"): return GITHUB_LOGIN
@@ -81,6 +85,7 @@ class PublisherGuardTests(unittest.TestCase):
         self.assertNotIn("github-upload", background)
         self.assertNotIn("gh release", background)
 
+    @unittest.skipIf(os.name == "nt", "publisher authorization is Linux-only")
     def test_correct_noop_fixtures_do_not_upload(self):
         with patch.object(compact_publisher, "preflight"), \
              patch.object(compact_publisher, "remote_pointer", return_value={

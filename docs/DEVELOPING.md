@@ -21,6 +21,18 @@ See [Refactor architecture](refactor-architecture.md), [Search architecture](sea
 
 ## Build and verify
 
+Run the maintained test profile with the Python interpreter available on your
+platform:
+
+```sh
+python scripts/test.py
+```
+
+On Unix-like systems the equivalent command may be `python3 scripts/test.py`.
+The local publisher authorization boundary is intentionally Linux-only; it
+depends on the allowlisted `x0ar` account, filesystem ownership and systemd
+units on the publisher host.
+
 ```sh
 node --test tests/*.test.js
 python3 -m unittest discover -s tests -p 'test_*.py'
@@ -32,6 +44,11 @@ python3 scripts/security_gate.py --revision HEAD
 ```
 
 Browser verification scripts in `scripts/verify_*_chromium.py` and `scripts/verify_*_firefox.py` cover deterministic fixtures and the anonymous live forum. Build output is deterministic and restricted to the package allowlist.
+
+The live Chromium smoke test requires Chromium or Chrome for Testing. Ordinary
+Google Chrome 137 and later no longer accept `--load-extension`. If the test
+browser is not on `PATH`, set `CHROMIUM_BINARY` to its executable before running
+`python scripts/test.py --release`.
 
 ## Release policy
 
