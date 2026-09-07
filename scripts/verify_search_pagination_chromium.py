@@ -189,7 +189,7 @@ def main() -> None:
             assert all(request["query"] == "needle" and request["scopes"] == ["post", "replies"] for request in requests)
 
             tabs = driver.find_elements(By.CSS_SELECTOR, ".fewercunts-search-tabs [role='tab']")
-            assert [tab.get_attribute("textContent") for tab in tabs] == ["Posts", "Replies"]
+            assert [tab.get_attribute("textContent") for tab in tabs] == ["Topics", "Replies"]
             assert tabs[0].get_attribute("aria-selected") == "true" and tabs[0].get_attribute("tabindex") == "0"
             tabs[0].send_keys(Keys.END)
             page_number(1, "Needle result 1")
@@ -255,7 +255,7 @@ def main() -> None:
             assert restarted.execute_script("return localStorage.getItem('fewercunts.recent-searches.v1')") is None
         finally:
             restarted.quit()
-    print({"result": "pass", "views": ["Posts", "Replies"], "pagesPerView": 12, "totalPerView": 277, "contentOffsets": True,
+    print({"result": "pass", "views": ["Topics", "Replies"], "pagesPerView": 12, "totalPerView": 277, "contentOffsets": True,
            "boundaries": True, "invalidInput": True, "formatting": "01-09 and 10+",
            "history": True, "resultBackRestore": True, "clearableLocalState": True,
            "recentSearches": True, "recentRestart": True, "recentRemoveAndClear": True,

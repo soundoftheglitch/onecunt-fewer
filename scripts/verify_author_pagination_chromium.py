@@ -125,7 +125,7 @@ def main() -> None:
             assert titles("replies") == ["Reply 276 by Alice", "Reply 277 by Alice"]
             assert "postsPage=13" in driver.current_url and "repliesPage=12" in driver.current_url
 
-            select_tab("Posts"); page_number("posts", 13)
+            select_tab("Topics"); page_number("posts", 13)
             driver.back(); page_number("replies", 12)
             driver.back(); page_number("replies", 1, "Reply 1 by Alice")
             driver.back(); page_number("replies", 10, "Reply 226 by Alice")
@@ -161,7 +161,7 @@ def main() -> None:
             assert any(row["kind"] == "replies" and row["offset"] == 225 for row in requests)
         finally:
             driver.quit()
-    print({"result": "pass", "views": ["Posts", "Replies"], "independentPages": True,
+    print({"result": "pass", "views": ["Topics", "Replies"], "independentPages": True,
            "actualOffsets": True, "history": True, "reload": True, "deepLinks": True,
            "boundaries": True, "invalidInput": True, "formatting": "01-09 and 10+",
            "mobile": "390x844", "accessibility": True})
