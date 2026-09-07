@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from publisher_guard import (DEFAULT_BRANCH, GITHUB_LOGIN, PublisherPolicyError, REPOSITORY,
@@ -16,6 +16,18 @@ if os.name != "nt":
 
 
 class PublisherGuardTests(unittest.TestCase):
+    def publisher_boundary_mocks(self):
+        hosts = MagicMock()
+        hosts.read_text.return_value = ""
+        return (
+            patch.object(publisher_guard, "validate_checkout_path"),
+            patch.object(publisher_guard, "safe_file"),
+            patch.object(publisher_guard, "safe_directory"),
+            patch.object(publisher_guard, "verify_security"),
+            patch.object(publisher_guard, "GH_HOSTS", hosts),
+            patch.dict(os.environ, {"GH_TOKEN": "", "GITHUB_TOKEN": ""}),
+        )
+
     def test_release_allowlist_accepts_only_expected_tags_and_assets(self):
         validate_release_target("v4.5.0", ["search-latest.json", "categories-latest.json",
                                           "ntforum-search-v1.manifest.json",
@@ -49,12 +61,15 @@ class PublisherGuardTests(unittest.TestCase):
                 if arguments[:2] == ("git", "ls-remote"): return f"{remote_head}\trefs/heads/main"
                 raise AssertionError(arguments)
             return execute
+        boundary = self.publisher_boundary_mocks()
         for execute in (runner(account="someone-else"), runner(repository="someone/else"),
                         runner(origin="https://github.com/someone/else.git"), runner(branch="feature/unsafe"),
                         runner(remote_head="b" * 40)):
-            with patch.object(publisher_guard, "validate_checkout_path"), self.assertRaises(PublisherPolicyError):
+            with boundary[0], boundary[1], boundary[2], boundary[3], boundary[4], boundary[5], \
+                    self.assertRaises(PublisherPolicyError):
                 preflight(runner=execute, effective_uid=1000)
-        with patch.object(publisher_guard, "validate_checkout_path"):
+            boundary = self.publisher_boundary_mocks()
+        with boundary[0], boundary[1], boundary[2], boundary[3], boundary[4], boundary[5]:
             self.assertEqual(preflight(runner=runner(), effective_uid=1000)["result"], "authorized")
 
     @unittest.skipIf(os.name == "nt", "publisher authorization is Linux-only")
@@ -69,8 +84,9 @@ class PublisherGuardTests(unittest.TestCase):
                           ("status", "--porcelain=v1"): "?? unsafe.tmp"}
                 return values[arguments[3:]]
             raise AssertionError(arguments)
-        with patch.object(publisher_guard, "validate_checkout_path"), self.assertRaisesRegex(
-                PublisherPolicyError, "uncommitted or untracked"):
+        boundary = self.publisher_boundary_mocks()
+        with boundary[0], boundary[1], boundary[2], boundary[3], boundary[4], boundary[5], \
+                self.assertRaisesRegex(PublisherPolicyError, "uncommitted or untracked"):
             preflight(runner=execute, effective_uid=1000)
 
     def test_dry_run_rejects_wrong_checkout_path(self):
