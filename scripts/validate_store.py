@@ -26,7 +26,7 @@ def png_size(path: Path) -> tuple[int, int]:
 
 
 def main() -> None:
-    manifest = json.loads((ROOT / "manifest.json").read_text())
+    manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     package = ROOT / "dist" / f"fewerCunts-{manifest['version']}.zip"
     assert manifest["manifest_version"] == 3
     assert manifest["name"] == "fewerCunts"
@@ -52,15 +52,15 @@ def main() -> None:
         "js": ["local-settings-transfer.js", "search/block-list.js", "archive-engine.js", "pagination-engine.js", "navigation-highlight.js", "navigation-state.js", "recent-searches.js", "about-content.js", "safe-links.js", "search/read-state.js", "search/saved-state.js", "search/categories.js", "search/dom-lifecycle.js", "search/category-ui.js", "search/ui-response.js", "search/ui-route.js", "search/ui-elements.js", "search/ui-unloved.js", "search/ui-categories.js", "search/ui.js"],
         "run_at": "document_idle",
     }
-    search_ui = (ROOT / "search/ui.js").read_text() + (ROOT / "search/ui-elements.js").read_text()
-    search_indexer = (ROOT / "search/indexer.js").read_text()
-    compact_reader = (ROOT / "search/compact-reader.js").read_text()
+    search_ui = (ROOT / "search/ui.js").read_text(encoding="utf-8") + (ROOT / "search/ui-elements.js").read_text(encoding="utf-8")
+    search_indexer = (ROOT / "search/indexer.js").read_text(encoding="utf-8")
+    compact_reader = (ROOT / "search/compact-reader.js").read_text(encoding="utf-8")
     assert ".innerHTML" not in search_ui, "search results must never render source or query text as HTML"
     assert 'linkedText("div", "post-message", item.snippet)' in search_ui
     assert 'link.target = "_blank"' in search_ui and 'link.rel = "noopener noreferrer"' in search_ui
     assert "node.textContent = text" in search_ui
     assert 'email: ""' in search_indexer, "public legacy records must not gain email data"
-    background = (ROOT / "background.js").read_text()
+    background = (ROOT / "background.js").read_text(encoding="utf-8")
     assert "new FewerCuntsIndexer.InitialImporter" not in background
     assert "new FewerCuntsIndexer.IncrementalSynchronizer" not in background
     assert "new FewerCuntsIndexer.BootstrapImporter" not in background
@@ -68,7 +68,7 @@ def main() -> None:
     assert "debounceMs: settings.refreshMinutes * 60_000" in background
     assert 'if (!settings.enabled) return { result: "disabled"' in background
     assert "search-snapshot-current" not in background
-    assert "releases/download/v4.5.0/search-latest.json" in (ROOT / "background.js").read_text()
+    assert "releases/download/v4.5.0/search-latest.json" in (ROOT / "background.js").read_text(encoding="utf-8")
     assert "Compact manifest signature mismatch" in compact_reader
     assert "GENERATION_PREFIX" in compact_reader and "ACTIVE_KEY" in compact_reader
 

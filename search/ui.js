@@ -630,7 +630,7 @@
       const tabs = element("div", "fewercunts-author-tabs");
       tabs.setAttribute("role", "tablist");
       tabs.setAttribute("aria-label", `Activity by ${username}`);
-      for (const [tabView, label] of [["posts", "Posts"], ["replies", "Replies"]]) {
+      for (const [tabView, label] of [["posts", "Topics"], ["replies", "Replies"]]) {
         const tab = element("button", "fewercunts-author-tab link-text", label);
         tab.type = "button";
         tab.setAttribute("role", "tab");
@@ -709,7 +709,7 @@
           children.push(row);
         }
       }
-      addPagination(children, response.total, page, `${view === "replies" ? "Replies" : "Posts"} by ${username} pagination`,
+      addPagination(children, response.total, page, `${view === "replies" ? "Replies" : "Topics"} by ${username} pagination`,
         { view: "author", user: username, tab: view, pageKey }, target => showAuthor(username, view, target));
       results.replaceChildren(...children);
     }
@@ -724,7 +724,7 @@
       const state = items.length ? (status.phase === "complete" ? "results" : "progress") : (status.phase === "complete" ? "empty" : "progress");
       results.dataset.state = items.length ? "results" : state;
       results.setAttribute("aria-busy", "false");
-      const label = resultKind === "r" ? "Replies" : "Posts";
+      const label = resultKind === "r" ? "Replies" : "Topics";
       const route = target => ({ view: "search", q: query, scopes: activeScopes.join(","),
         tab: resultKind === "r" ? "replies" : null, page: target });
       const children = [statusPanel(state, items.length || status.phase !== "complete"
@@ -735,7 +735,7 @@
       });
       const tabs = element("div", "fewercunts-author-tabs fewercunts-search-tabs");
       tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", `Search results for ${query}`);
-      for (const [kind, tabLabel] of [["t", "Posts"], ["r", "Replies"]]) {
+      for (const [kind, tabLabel] of [["t", "Topics"], ["r", "Replies"]]) {
         const tab = element("button", "fewercunts-author-tab link-text", tabLabel); tab.type = "button";
         tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", String(kind === resultKind));
         tab.tabIndex = kind === resultKind ? 0 : -1;

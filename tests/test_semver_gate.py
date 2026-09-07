@@ -50,7 +50,8 @@ class SemVerGateTests(unittest.TestCase):
         assets = ["fewerCunts-4.5.0.zip", "fewerCunts-firefox-4.5.0.xpi"]
         self.assertEqual(validate_extension_release("initial", "4.5.0", "v4.5.0", assets)["result"], "pass")
         with self.assertRaises(PublisherPolicyError):
-            validate_extension_release("initial", "4.5.1", "v4.5.1", assets)
+            validate_extension_release("initial", "4.5.1", "v4.5.1", assets,
+                                       public_version="4.5.0")
 
 
 if __name__ == "__main__": unittest.main()

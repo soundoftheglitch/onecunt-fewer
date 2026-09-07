@@ -7,7 +7,10 @@ import argparse
 import json
 import os
 from pathlib import Path
-import pwd
+try:
+    import pwd
+except ImportError:  # The publisher boundary itself remains Linux-only.
+    pwd = None
 import re
 import stat
 
@@ -73,11 +76,17 @@ def validate_extension_release(kind: str, version: str, tag: str, assets: list[s
 
 
 def validate_checkout_path(path: Path) -> None:
-    if path.resolve(strict=True) != ROOT.resolve(strict=True):
+    try:
+        matches_allowlist = path.resolve(strict=True) == ROOT.resolve(strict=True)
+    except OSError:
+        matches_allowlist = False
+    if not matches_allowlist:
         raise PublisherPolicyError("Publisher repository path is not allowlisted")
 
 
 def preflight(*, compact: bool = False, runner=command, effective_uid: int | None = None) -> dict:
+    if pwd is None:
+        raise PublisherPolicyError("The publisher authorization boundary requires Linux")
     operator = pwd.getpwnam(OPERATOR)
     if (os.geteuid() if effective_uid is None else effective_uid) != operator.pw_uid:
         raise PublisherPolicyError(f"Publisher must run as local operator {OPERATOR}")

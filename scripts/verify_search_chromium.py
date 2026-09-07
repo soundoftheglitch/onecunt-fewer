@@ -231,7 +231,7 @@ def main() -> None:
             assert [node.text for node in driver.find_elements(
                 By.CSS_SELECTOR, ".fewercunts-search-header > div")] == ["Size", "Subject", "From", "When"]
             assert [tab.text for tab in driver.find_elements(
-                By.CSS_SELECTOR, ".fewercunts-search-tabs [role='tab']")] == ["Posts", "Replies"]
+                By.CSS_SELECTOR, ".fewercunts-search-tabs [role='tab']")] == ["Topics", "Replies"]
             assert all(result.find_element(By.CSS_SELECTOR, ".fewercunts-result-reply").get_attribute("textContent").strip() == "Reply" for result in results)
             assert all(result.find_element(By.CSS_SELECTOR, "a[data-fewercunts-doc-key]").get_attribute("href").startswith("https://ntforum.net/thread/") for result in results)
 
@@ -302,7 +302,7 @@ def main() -> None:
             author_rows = driver.find_elements(By.CSS_SELECTOR, ".fewercunts-author-thread")
             assert all(row.find_element(By.CSS_SELECTOR, ".col-xs-2 [data-fewercunts-author]").text.strip() == author_name for row in author_rows)
             author_tabs = driver.find_elements(By.CSS_SELECTOR, ".fewercunts-author-tab")
-            assert [tab.text for tab in author_tabs] == ["Posts", "Replies"]
+            assert [tab.text for tab in author_tabs] == ["Topics", "Replies"]
             assert all(tab.get_attribute("role") == "tab" for tab in author_tabs)
             assert [tab.get_attribute("aria-selected") for tab in author_tabs] == ["true", "false"]
             author_tabs[1].click()
@@ -416,7 +416,7 @@ def main() -> None:
                 "consentRequired": consent_required,
                 "threadsNavigationRestored": True,
                 "authorThreadView": author_name,
-                "authorActivityTabs": ["Posts", "Replies"],
+                "authorActivityTabs": ["Topics", "Replies"],
                 "unlovedNavigation": True,
                 "userMenu": ["Create Account", "Change Password", "Notifications", "Logout"],
                 "topNavigation": ["Home", "User", "New Topic", "View", "Search", "About"],
