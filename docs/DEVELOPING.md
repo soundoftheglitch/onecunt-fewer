@@ -48,7 +48,9 @@ Browser verification scripts in `scripts/verify_*_chromium.py` and `scripts/veri
 The live Chromium smoke test requires Chromium or Chrome for Testing. Ordinary
 Google Chrome 137 and later no longer accept `--load-extension`. If the test
 browser is not on `PATH`, set `CHROMIUM_BINARY` to its executable before running
-`python scripts/test.py --release`.
+`python scripts/test.py --release`. On Windows, Chrome for Testing uses the
+ordinary `chrome.exe` filename, so `CHROMIUM_BINARY` is always required to
+distinguish it from branded Google Chrome.
 
 ## Release policy
 

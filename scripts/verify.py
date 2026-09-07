@@ -20,13 +20,14 @@ MONKEYBUTLER_LIVE_THREAD_ID = 2647
 def chromium_binary() -> str:
     configured = os.environ.get("CHROMIUM_BINARY")
     candidates = [configured] if configured else []
-    candidates.extend(filter(None, (shutil.which("chromium"), shutil.which("chrome-for-testing"))))
+    candidates.extend(filter(None, (shutil.which("chromium"),)))
     for candidate in candidates:
         path = Path(candidate).expanduser()
         if path.is_file():
             return str(path)
     raise RuntimeError(
-        "Chromium or Chrome for Testing is required. Set CHROMIUM_BINARY to its executable. "
+        "Chromium or Chrome for Testing is required. Set CHROMIUM_BINARY to its executable "
+        "(always required for Chrome for Testing on Windows). "
         "Ordinary Google Chrome 137+ no longer supports --load-extension."
     )
 
