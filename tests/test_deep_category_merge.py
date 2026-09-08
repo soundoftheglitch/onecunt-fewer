@@ -56,3 +56,17 @@ class CampaignCliTests(__import__('unittest').TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn('--merge-only',result.stdout)
         self.assertIn('--limit',result.stdout)
+
+class CategoryDownloadTests(__import__('unittest').TestCase):
+    def test_verification_retries_negative_cache_with_fresh_urls(self):
+        import sys
+        from pathlib import Path
+        from urllib.error import HTTPError
+        from unittest.mock import MagicMock
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
+        import publish_category_database as publisher
+        response=MagicMock();response.__enter__.return_value.read.return_value=b'verified'
+        error=HTTPError('https://example.test/asset',404,'not yet available',{},None)
+        with patch.object(publisher,'urlopen',side_effect=[error,response]) as opened,patch.object(publisher.time,'sleep'):
+            self.assertEqual(publisher.download('https://example.test/asset'),b'verified')
+            self.assertNotEqual(opened.call_args_list[0].args[0].full_url,opened.call_args_list[1].args[0].full_url)

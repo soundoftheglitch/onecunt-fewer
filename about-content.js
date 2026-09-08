@@ -27,6 +27,7 @@
   ]);
 
   const HISTORY = Object.freeze([
+    ["4.5.6", "2026-09-08", "Made new category-asset verification tolerate transient GitHub/CDN responses without replacing the active pointer early."],
     ["4.5.5", "2026-09-08", "Restored the deep-campaign command-line entry point and verified bounded restart execution."],
     ["4.5.4", "2026-09-08", "Fixed automatic database checks, persistent category merging and resumable Qwen reply refinement; failed analysis remains retryable."],
     ["4.5.3", "2026-09-08", "Added auditable reply-level category decisions with junk filtering and engagement-anchor reprocessing."],

@@ -2,7 +2,7 @@
 
 An optional browser extension for [ntforum.net](https://ntforum.net/) that adds search, categories, author views, unread state, saved and muted threads, notifications, pagination, and a local block list.
 
-Current version: **4.5.5**
+Current version: **4.5.6**
 
 > This independent project is not affiliated with or endorsed by ntforum.net.
 
@@ -22,7 +22,7 @@ These steps work in desktop Chrome and other Chromium-based browsers.
 
 #### 1. Download
 
-Click **[Download fewerCunts for Chromium](https://github.com/soundoftheglitch/onecunt-fewer/releases/download/v4.5.5/fewerCunts-4.5.5.zip)**.
+Click **[Download fewerCunts for Chromium](https://github.com/soundoftheglitch/onecunt-fewer/releases/download/v4.5.6/fewerCunts-4.5.6.zip)**.
 
 Your browser normally saves the file in **Downloads**. Do not try to open the ZIP in the browser.
 
@@ -30,11 +30,11 @@ Your browser normally saves the file in **Downloads**. Do not try to open the ZI
 
 The extension must be in a normal folder, not left inside the ZIP.
 
-- **Windows:** open Downloads, right-click `fewerCunts-4.5.5.zip`, select **Extract All**, then **Extract**.
-- **macOS:** open Downloads and double-click `fewerCunts-4.5.5.zip`.
+- **Windows:** open Downloads, right-click `fewerCunts-4.5.6.zip`, select **Extract All**, then **Extract**.
+- **macOS:** open Downloads and double-click `fewerCunts-4.5.6.zip`.
 - **Linux:** open Downloads, right-click the ZIP, and select **Extract Here** or **Extract To**.
 
-Move the extracted `fewerCunts-4.5.5` folder somewhere permanent, such as Documents. **Do not delete or move this folder after installation**—the browser loads the extension from it.
+Move the extracted `fewerCunts-4.5.6` folder somewhere permanent, such as Documents. **Do not delete or move this folder after installation**—the browser loads the extension from it.
 
 Open the folder once. You have the correct folder if it contains a file named `manifest.json`. If you see another single folder instead, open that folder and use it in the next step.
 
@@ -56,7 +56,7 @@ Press Enter.
 3. Select the extracted folder that contains `manifest.json`.
 4. Confirm the folder selection.
 
-You should now see a card named **fewerCunts** with version **4.5.5** and no red error message.
+You should now see a card named **fewerCunts** with version **4.5.6** and no red error message.
 
 #### 5. Check that it works
 
@@ -73,13 +73,13 @@ Firefox requires extensions to be signed by Mozilla for permanent installation. 
 
 #### 1. Download
 
-Click **[Download fewerCunts for Firefox](https://github.com/soundoftheglitch/onecunt-fewer/releases/download/v4.5.5/fewerCunts-firefox-4.5.5.xpi)**.
+Click **[Download fewerCunts for Firefox](https://github.com/soundoftheglitch/onecunt-fewer/releases/download/v4.5.6/fewerCunts-firefox-4.5.6.xpi)**.
 
 #### 2. Load it temporarily
 
 1. Enter `about:debugging#/runtime/this-firefox` in the Firefox address bar.
 2. Select **Load Temporary Add-on**.
-3. Choose `fewerCunts-firefox-4.5.5.xpi` from Downloads.
+3. Choose `fewerCunts-firefox-4.5.6.xpi` from Downloads.
 4. Open or reload [ntforum.net](https://ntforum.net/).
 5. Wait for the loading bar, then confirm that **View**, **Search**, and **About** appear in the forum navigation.
 
@@ -105,7 +105,7 @@ The first signed search-index download is about 100 MiB. Leave NTForum open and 
 
 ### Search says it is unavailable or still preparing
 
-Wait two minutes and try again. If it still fails, open **About → Readme** in the extension and confirm the version is 4.5.5, then reload NTForum. Removing and reinstalling the extension is the final recovery step because it can remove extension-owned local settings.
+Wait two minutes and try again. If it still fails, open **About → Readme** in the extension and confirm the version is 4.5.6, then reload NTForum. Removing and reinstalling the extension is the final recovery step because it can remove extension-owned local settings.
 
 ### The browser asks for access
 

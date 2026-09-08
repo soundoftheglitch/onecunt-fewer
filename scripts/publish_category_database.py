@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Publish the signed category map on the sole 4.5.0 release."""
 from __future__ import annotations
+import time
+from urllib.error import HTTPError
 import fcntl, gzip, hashlib, json, shutil, sqlite3, subprocess, tempfile
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -23,8 +25,19 @@ def sha(path):
         for chunk in iter(lambda: source.read(1024*1024), b""): h.update(chunk)
     return h.hexdigest()
 def canonical(value): return (json.dumps(value,sort_keys=True,separators=(",",":"))+"\n").encode()
-def download(url):
-    with urlopen(Request(url,headers={"User-Agent":"fewerCunts-categories-publisher/1","Cache-Control":"no-cache"}),timeout=180) as response: return response.read()
+def download(url, *, missing_ok=False):
+    # GitHub/CDN may retain a negative lookup made before an immutable asset
+    # was uploaded. Every verification must observe a fresh object response.
+    for attempt in range(5):
+        fresh=url + ('&' if '?' in url else '?') + 'verify=' + str(time.time_ns())
+        try:
+            with urlopen(Request(fresh,headers={"User-Agent":"fewerCunts-categories-publisher/1","Cache-Control":"no-cache"}),timeout=180) as response:
+                return response.read()
+        except HTTPError as error:
+            if (missing_ok and error.code==404) or error.code not in (404,429,500,502,503,504) or attempt==4:
+                raise
+            time.sleep(0.25 * 2**attempt)
+
 def release_exists(tag):
     validate_release_target(tag)
     return subprocess.run(["gh","api",f"repos/{REPOSITORY}/releases/tags/{tag}"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
@@ -85,8 +98,8 @@ def publish():
         for item in assets:
             remote=f"https://github.com/{REPOSITORY}/releases/download/{release}/{item.name}"
             try:
-                existing=download(remote)
-            except __import__('urllib.error',fromlist=['HTTPError']).HTTPError as error:
+                existing=download(remote,missing_ok=True)
+            except HTTPError as error:
                 if error.code != 404: raise
                 run("gh","release","upload",release,str(item),"--repo",REPOSITORY)
             else:
@@ -99,9 +112,9 @@ def publish():
         with tempfile.NamedTemporaryFile() as output:
             run("openssl","pkeyutl","-verify","-rawin","-pubin","-inkey",str(PUBLIC_KEY),"-in",str(manifest_path),"-sigfile",str(signature))
         pointer={"format":"ntforum-categories-pointer","schemaVersion":1,"generationTag":generation,
-          "manifestUrl":f"{base}/{manifest_path.name}","manifestSha256":sha(manifest_path),"signatureUrl":f"{base}/{signature.name}",
+          "manifestUrl":f"{base}/{manifest_path.name}?sha={sha(manifest_path)}","manifestSha256":sha(manifest_path),"signatureUrl":f"{base}/{signature.name}?sha={sha(signature)}",
           "sourceSha256":manifest["sourceSha256"],
-          "mapUrl":f"{base}/{map_asset.name}","mapSha256":sha(map_asset),"publicKeySha256":sha(PUBLIC_KEY)}
+          "mapUrl":f"{base}/{map_asset.name}?sha={sha(map_asset)}","mapSha256":sha(map_asset),"publicKeySha256":sha(PUBLIC_KEY)}
         pointer_path=directory/"categories-latest.json"; pointer_path.write_bytes(canonical(pointer))
         validate_release_target(release,[str(pointer_path)])
         run("gh","release","upload",release,str(pointer_path),"--repo",REPOSITORY,"--clobber")
