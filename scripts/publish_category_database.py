@@ -4,6 +4,7 @@ from __future__ import annotations
 import fcntl, gzip, hashlib, json, shutil, sqlite3, subprocess, tempfile
 from pathlib import Path
 from urllib.request import Request, urlopen
+from update_categories import LOCK as UPDATE_LOCK
 from publisher_guard import preflight, validate_release_target
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,8 @@ def publish():
         assert forbidden==0
         assert db.execute("select count(*) from thread_categories where category_id not in (select category_id from category_taxonomy)").fetchone()[0]==0
         has_reply_decisions=db.execute("select count(*) from sqlite_master where type='table' and name='reply_category_decisions'").fetchone()[0]
+        if not has_reply_decisions:
+            raise RuntimeError("Refusing category publication: reply decisions are missing")
         reply_decisions=reply_analyse=reply_links=reply_ignored=0
         if has_reply_decisions:
             columns = {row[1] for row in db.execute("PRAGMA table_info(reply_category_decisions)")}
@@ -51,28 +54,44 @@ def publish():
             reply_ignored=db.execute("select count(*) from reply_category_decisions where decision='ignore_junk'").fetchone()[0]
             assert reply_decisions==db.execute("select count(*) from posts").fetchone()[0]
             assert db.execute("select count(*) from reply_category_decisions where category_id not in (select category_id from category_taxonomy)").fetchone()[0]==0
+        reply_map={str(row[0]):row[1] for row in db.execute("select p.post_id,p.category_id from post_categories p join thread_categories t on t.thread_id=p.thread_id where p.category_id!=t.category_id order by p.post_id")}
+        refined=db.execute("select count(*) from reply_category_decisions where relationship='qwen-refined'").fetchone()[0]
         category_map={str(row[0]):row[1] for row in db.execute("select thread_id,category_id from thread_categories order by thread_id")}
     with tempfile.TemporaryDirectory(prefix="fewercunts-category-release-") as name:
         directory=Path(name); map_asset=directory/"ntforum-categories-v1.json.gz"
         with map_asset.open("wb") as raw:
             with gzip.GzipFile(filename="ntforum-categories-v1.json",mode="wb",fileobj=raw,compresslevel=9,mtime=0) as target:
-                target.write(canonical({"version":1,"threads":category_map}))
+                target.write(canonical({"version":1,"threads":category_map,"replies":reply_map}))
+        hashed_map=directory/f"ntforum-categories-v1-{sha(map_asset)[:12]}.json.gz"
+        map_asset.rename(hashed_map);map_asset=hashed_map
         manifest={"format":"ntforum-categories-map","schemaVersion":1,"taxonomyVersion":1,
           "threads":threads,"replies":replies,"automaticallyCategorisedThreads":automatic,
           "uncategorisedThreads":threads-automatic,"sportsRule":"Bare sport means women; mens and mixed are explicit; womens suffix is forbidden.",
           "sourceBytes":SOURCE.stat().st_size,"sourceSha256":sha(SOURCE),"mapAsset":map_asset.name,
           "mapBytes":map_asset.stat().st_size,"mapSha256":sha(map_asset),
           "replyDecisions":reply_decisions,"replyAnalyse":reply_analyse,"replyPreserveLinks":reply_links,
-          "replyIgnoredJunk":reply_ignored}
+          "replyIgnoredJunk":reply_ignored,"replyModelDecisions":refined,
+          "replyPendingAnalysis":reply_analyse+reply_links-refined}
         manifest_path=directory/"ntforum-categories-v1.manifest.json"; manifest_path.write_bytes(canonical(manifest))
-        signature=directory/"ntforum-categories-v1.manifest.sig"
+        immutable_manifest=directory/f"ntforum-categories-v1-{sha(manifest_path)[:12]}.manifest.json"
+        manifest_path.rename(immutable_manifest);manifest_path=immutable_manifest
+        signature=manifest_path.with_suffix('.sig')
         run("openssl","pkeyutl","-sign","-rawin","-inkey",str(PRIVATE_KEY),"-in",str(manifest_path),"-out",str(signature))
         generation=f"categories-v1-{hashlib.sha256(manifest_path.read_bytes()).hexdigest()[:12]}"
         assets=[map_asset,manifest_path,signature]
         release="v4.5.0"
         if not release_exists(release): raise RuntimeError("The verified 4.5.0 release must exist before publishing data")
         validate_release_target(release,[str(item) for item in assets])
-        run("gh","release","upload",release,*map(str,assets),"--repo",REPOSITORY,"--clobber")
+        for item in assets:
+            remote=f"https://github.com/{REPOSITORY}/releases/download/{release}/{item.name}"
+            try:
+                existing=download(remote)
+            except __import__('urllib.error',fromlist=['HTTPError']).HTTPError as error:
+                if error.code != 404: raise
+                run("gh","release","upload",release,str(item),"--repo",REPOSITORY)
+            else:
+                if hashlib.sha256(existing).hexdigest()!=sha(item):
+                    raise RuntimeError("Refusing to overwrite immutable category asset")
         base=f"https://github.com/{REPOSITORY}/releases/download/{release}"
         for item in assets:
             data=download(f"{base}/{item.name}")
@@ -91,6 +110,7 @@ def publish():
 
 def main():
     LOCK.parent.mkdir(parents=True,exist_ok=True)
-    with LOCK.open("w") as lock:
+    with UPDATE_LOCK.open("a") as update_lock, LOCK.open("a") as lock:
+        fcntl.flock(update_lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB); print(json.dumps(publish(),sort_keys=True))
 if __name__=="__main__": main()

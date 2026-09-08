@@ -115,8 +115,10 @@
   class CategoryRepository {
     constructor(indexedDb, loadBase) { this.indexedDb = indexedDb; this.loadBase = loadBase; this.basePromise = null; }
     async base() {
+      if (this.baseLoadedAt && Date.now() - this.baseLoadedAt > 15 * 60_000) this.basePromise = null;
       if (!this.basePromise) this.basePromise = Promise.resolve(this.loadBase()).then(value => {
         if (!value || value.version !== 1 || typeof value.threads !== "object") throw new Error("Invalid category base");
+        this.baseLoadedAt = Date.now();
         return value;
       });
       return this.basePromise;
@@ -139,9 +141,10 @@
       return clean.map(item => {
         const direct = overrides[item.docKey];
         const root = item.docKey.startsWith("r:") ? overrides[`t:${Number(item.threadId)}`] : direct;
-        const categoryId = direct?.categoryId || root?.categoryId || base.threads[String(Number(item.threadId))] || UNCATEGORISED;
+        const refined = item.docKey.startsWith("r:") ? base.replies?.[item.docKey.slice(2)] : null;
+        const categoryId = direct?.categoryId || root?.categoryId || refined || base.threads[String(Number(item.threadId))] || UNCATEGORISED;
         return { docKey: item.docKey, threadId: Number(item.threadId), categoryId,
-          source: direct ? "manual" : (root ? "thread-manual" : (categoryId === UNCATEGORISED ? "uncategorised" : "automatic")) };
+          source: direct ? "manual" : (root ? "thread-manual" : (refined ? "reply-refined" : (categoryId === UNCATEGORISED ? "uncategorised" : "automatic"))) };
       });
     }
     async set(docKey, threadId, categoryId) {

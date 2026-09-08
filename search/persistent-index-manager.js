@@ -14,7 +14,7 @@
       this.state = { phase: "idle", active: null, error: null, recovered: false };
       this.operation = null;
     }
-    status() { return { ...this.state }; }
+    status() { return { ...this.state, freshness: this.freshness || null }; }
     reset() { this.state = { phase: "idle", active: null, error: null, recovered: false }; }
     async openGeneration(generationId, recovered = false) {
       const opened = await this.reader.open(generationId);
@@ -25,6 +25,7 @@
       if (this.operation) return this.operation;
       if (this.state.phase === "ready" && this.state.active) return this.status();
       this.state = { ...this.state, phase: "recovering", error: null };
+      this.freshness = await this.storage.readCheck?.().catch(() => null);
       await this.storage.cleanupAbandoned();
       const pointer = await this.storage.activePointer().catch(() => null);
       if (pointer) {
@@ -42,6 +43,13 @@
       this.state = { phase: "empty", active: null, error: null, recovered: Boolean(pointer) };
       return this.status();
     }
+    async check({ intervalMs = 15 * 60_000 } = {}) {
+      await this.startup();
+      const attempted = Date.parse(this.freshness?.attemptedUtc || "");
+      if (this.state.active && Number.isFinite(attempted) && Date.parse(this.now()) - attempted < intervalMs)
+        return { result: "debounced", ...this.status() };
+      return this.install();
+    }
     async install({ force = false } = {}) {
       if (this.operation) return this.operation;
       if (!this.state.active && this.state.phase === "idle") await this.startup();
@@ -53,8 +61,13 @@
       const previousId = this.state.active?.generationId || null;
       try {
         this.state = { ...this.state, phase: "checking", error: null };
+        this.freshness = { ...this.freshness, attemptedUtc: this.now(), error: null };
+        await this.storage.writeCheck?.(this.freshness);
         const pointer = await this.downloader.fetchPointer();
-        if (!force && this.state.active?.watermark >= pointer.watermark) {
+        this.freshness = { ...this.freshness, checkedUtc: this.now(),
+          publishedWatermark: pointer.watermark, publishedGenerationId: contract.generationId(pointer.manifestSha256) };
+        await this.storage.writeCheck?.(this.freshness);
+        if (!force && this.state.active?.generationId === contract.generationId(pointer.manifestSha256)) {
           this.state = { ...this.state, phase: "ready" };
           return { result: "unchanged", ...this.status() };
         }
@@ -80,6 +93,8 @@
           .catch(() => {});
         return { result: previousId === generationId ? "unchanged" : "installed", ...this.status() };
       } catch (error) {
+        this.freshness = { ...this.freshness, error: String(error.message || error) };
+        await this.storage.writeCheck?.(this.freshness).catch(() => {});
         if (previousId) {
           try { await this.openGeneration(previousId, true); }
           catch (_) { this.state.active = null; }

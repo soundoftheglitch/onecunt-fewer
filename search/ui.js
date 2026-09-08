@@ -333,7 +333,13 @@
       autoUpdate.checked = settings.enabled;
       refreshInterval.value = String(settings.refreshMinutes);
       refreshInterval.disabled = !settings.enabled;
-      const updated = update.lastSuccessUtc ? `; updated ${new Date(update.lastSuccessUtc).toLocaleString()}` : "; not yet updated";
+      const dataThrough = stats.watermark ? `; database through ${new Date(stats.watermark).toLocaleString()}` : "; database not downloaded";
+      const checked = stats.freshness?.checkedUtc ? `; checked ${new Date(stats.freshness.checkedUtc).toLocaleString()}` : "; database not yet checked";
+      const available = stats.freshness?.publishedGenerationId && stats.freshness.publishedGenerationId !== stats.generationId
+        ? "; newer database available" : "";
+      const failed = stats.freshness?.error ? "; update failed — retry with Update" : "";
+      const updated = dataThrough + checked + available + failed + (update.lastSuccessUtc
+        ? `; recent posts refreshed ${new Date(update.lastSuccessUtc).toLocaleString()}` : "");
       const storageBytes = Number.isFinite(stats.indexBytes) ? stats.indexBytes : stats.usage;
       storageStatus.textContent = ` — ${stats.documents.toLocaleString()} posts, ${stats.threads.toLocaleString()} threads, ${bytes(storageBytes)} index${updated}`;
       if (Number.isFinite(stats.originUsage) && stats.originUsage > storageBytes) {

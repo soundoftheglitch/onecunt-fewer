@@ -73,7 +73,7 @@
     };
     const render = value => {
       cascade.replaceChildren();
-      const inherited = isReply && value.source !== "manual";
+      const inherited = isReply && !["manual", "reply-refined"].includes(value.source);
       const selectedId = inherited ? "__inherit__" : value.categoryId;
       const rootItems = [["uncategorised", names.get("uncategorised")], ...children(null)];
       if (isReply) rootItems.unshift(["__inherit__", "Inherit from post"]);
@@ -92,7 +92,7 @@
       }
       const categoryName = names.get(value.categoryId) || "Uncategorised";
       result.textContent = categoryName === "Uncategorised" ? "Unassigned"
-        : `${inherited ? "Inherited: " : ""}${categoryName}`;
+        : `${value.source === "reply-refined" ? "Shared reply: " : inherited ? "Inherited: " : ""}${categoryName}`;
       label.title = `${categoryName} (${value.source})`;
       disable(false);
     };

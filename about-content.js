@@ -27,6 +27,7 @@
   ]);
 
   const HISTORY = Object.freeze([
+    ["4.5.4", "2026-09-08", "Fixed automatic database checks, persistent category merging and resumable Qwen reply refinement; failed analysis remains retryable."],
     ["4.5.3", "2026-09-08", "Added auditable reply-level category decisions with junk filtering and engagement-anchor reprocessing."],
     ["4.5.2", "2026-09-04", "Replaced the technical README with a beginner-first installation, verification, recovery, update, privacy and uninstall guide."],
     ["4.5.1", "2026-09-03", "Plugin deep links now reveal only after their rendered view is ready instead of remaining behind the Classic startup mask."],

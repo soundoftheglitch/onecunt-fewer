@@ -103,6 +103,9 @@
       }));
     }
 
+    async readCheck() { return this.json(`${KEY_ROOT}meta/check.json`); }
+    async writeCheck(value) { return this.putJson(`${KEY_ROOT}meta/check.json`, value); }
+
     async generation(generationId) {
       const record = await this.json(generationKey(generationId));
       return record ? contract.validateGeneration(record) : null;

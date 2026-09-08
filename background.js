@@ -307,6 +307,15 @@ function maintainCompact({ checkRemote = false, force = false } = {}) {
   return activeCompact;
 }
 
+async function maintainScheduledCompact() {
+  const [settings, migrationStatus] = await Promise.all([repository.getSettings(), migrationState.get()]);
+  if (!settings.enabled || migrationStatus.cleared || ["paused", "cleared"].includes(migrationStatus.phase))
+    return { result: "paused" };
+  const result = await compactManager.check({ intervalMs: Math.max(15, Number(settings.refreshMinutes) || 15) * 60_000 });
+  if (result.active?.watermark) await compactDeltaRepository.pruneThrough(result.active.watermark);
+  return result;
+}
+
 function maintainDelta({ force = false } = {}) {
   if (!activeDelta) activeDelta = Promise.all([compactManager.startup(), repository.getSettings()]).then(([status, settings]) => {
     if (status.phase !== "ready") return { result: "compact-unavailable" };
@@ -450,13 +459,14 @@ async function maintainIndex() {
 
 async function searchStats() {
   const compact = await compactManager.startup().catch(() => compactManager.status());
-  if (compact.phase !== "ready" || !compact.active) return repository.stats();
+  if (compact.phase !== "ready" || !compact.active) return { documents: 0, threads: 0, indexBytes: 0, usage: 0, source: "compiled", freshness: compact.freshness };
   const estimate = await (globalThis.navigator?.storage?.estimate?.() || {});
   return { documents: compact.active.documentCount, threads: compact.active.threadCount,
     usage: compact.active.bytes,
     indexBytes: compact.active.bytes,
     originUsage: Number.isFinite(Number(estimate.usage)) ? Number(estimate.usage) : null,
-    source: "compiled", generationId: compact.active.generationId };
+    source: "compiled", generationId: compact.active.generationId, watermark: compact.active.watermark,
+    freshness: compact.freshness };
 }
 
 async function developerReplyPolicy() {
@@ -480,10 +490,10 @@ async function developerReplyPolicy() {
 chrome.runtime.onInstalled.addListener(() => chrome.alarms.create("fewercunts-reconcile", { periodInMinutes: 15 }));
 chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create("fewercunts-reconcile", { periodInMinutes: 15 });
-  migration.run().then(() => maintainDelta()).catch(error => console.warn("fewerCunts compact migration paused:", error));
+  migration.run().then(() => maintainScheduledCompact()).then(() => maintainDelta()).catch(error => console.warn("fewerCunts compact migration paused:", error));
 });
 chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === "fewercunts-reconcile") maintainCompact().then(() => maintainDelta())
+  if (alarm.name === "fewercunts-reconcile") maintainScheduledCompact().then(() => maintainDelta())
     .catch(error => console.warn("fewerCunts scheduled compact update paused:", error));
 });
 chrome.notifications?.onClicked.addListener(async notificationId => {
@@ -500,7 +510,7 @@ const searchRouter = FewerCuntsMessageRouter.create({
   "fewercunts-search:clear": () => clearIndex(),
   "fewercunts-search:stats": () => searchStats(),
   "fewercunts-search:developer-reply-policy": () => developerReplyPolicy(),
-  "fewercunts-search:update": message => updateSearch(Boolean(message.force)),
+  "fewercunts-search:update": async message => { await maintainCompact({ checkRemote: true }); return updateSearch(Boolean(message.force)); },
   "fewercunts-search:update-status": () => compactDeltaRepository.state(),
   "fewercunts-search:settings": message => message.settings ? repository.putSettings(message.settings) : repository.getSettings(),
   "fewercunts-search:query": message => searchQuery(message),
@@ -548,7 +558,7 @@ const searchRouter = FewerCuntsMessageRouter.create({
   "fewercunts-search:category-set": message => categories.set(message.docKey, message.threadId, message.categoryId),
   "fewercunts-search:category-inherit": message => categories.inherit(message.docKey, message.threadId),
   "fewercunts-search:maintain": () => {
-    migration.run().then(() => maintainDelta()).catch(error => console.warn("fewerCunts compact migration paused:", error));
+    migration.run().then(() => maintainScheduledCompact()).then(() => maintainDelta()).catch(error => console.warn("fewerCunts compact migration paused:", error));
     return maintainIndex();
   },
   "fewercunts-search:navigation-target": message => visibleNavigationTarget(message.docKey, message.revealHidden),

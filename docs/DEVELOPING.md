@@ -57,3 +57,14 @@ distinguish it from branded Google Chrome.
 4.5.0 is the intentionally clean first release. Each subsequent correction increments the patch component. A release is accepted only when its source commit, `main`, version tag, Chromium ZIP, Firefox XPI, anonymous downloads, and publisher checkout agree byte-for-byte. Credential scanning and package allowlists run before publication.
 
 Version 5 must not be published until its beginner installation path is implemented and verified. The preferred distribution endpoints are the Chrome Web Store and a Mozilla-signed Firefox package; GitHub remains the transparent source and manual fallback.
+
+
+## Category and search recovery (4.5.4)
+
+The daily publisher and deep campaign must use the same deployed checkout and schema-aware `update_categories.update` merge. Both serialise active category replacement with `fewercunts-category-update.lock`; the publisher rejects a missing reply-decision table. Category maps/manifests use content-addressed filenames and the signed pointer switches after anonymous verification. Do not restore the retired standalone deep database builder.
+
+`deep_category_campaign.py --limit 6 --request-timeout 240` retries failed inference with persistent backoff and rechecks uncertain threads with up to eight bounded public replies. `refine_reply_categories.py --limit 2 --request-timeout 240` checkpoints real reply-level model decisions, prioritising new/edited replies over the historical queue. Run the schema-aware merge after refinement and before publication. Completed prefilter rows are not completed model analysis: published `replyModelDecisions` and `replyPendingAnalysis` expose the distinction. Valid uncertain results retain inheritance; failed calls remain retryable. Device-local overrides take precedence over shared reply categories.
+
+Host boot cleanup must preserve the exact extension origins in both IndexedDB and CacheStorage. `scripts/preserve_chromium_index.py` recognises approved installation-path IDs, preserves only those origins, rejects symlinks/nested mounts, and resumes interrupted move/restore operations. Verify with a disposable Chromium profile: write a real extension cache, close the browser, clean the profile, reopen and read the same data; unrelated history and site storage must disappear. Never run the whole host cleanup service as a live test.
+
+The extension checks the signed search pointer at a bounded interval when automatic updates are enabled. Successful checks and failed attempts survive worker restarts; unchanged generations do not redownload. The search controls distinguish the base database watermark, last check, recent-post refresh, and failed/pending replacement. Pause and clear remain respected by scheduled checks.

@@ -98,3 +98,17 @@ test("concurrent startup polling joins an active install without cleaning its st
   assert.equal(storage.active, id("b"));
   assert.equal(cleanupCalls, 2, "post-activation cleanup may run only after staging completes");
 });
+
+test("automatic checks survive worker restart and do not redownload unchanged data", async () => {
+  const storage = new FakeStorage();
+  storage.complete.set(id("a"), { generationId:id("a"),watermark:"2026-09-01T00:00:00Z", documentCount:2,termCount:3 });
+  storage.active=id("a"); let checks=0;
+  storage.readCheck=async()=>storage.lastCheck||null;
+  storage.writeCheck=async value=>{storage.lastCheck=value;};
+  const options={storage,reader:new FakeReader(storage),now:()=>"2026-09-08T12:00:00Z",
+    downloader:{fetchPointer:async()=>{checks++; return pointer("a","2026-09-01T00:00:00Z");},
+      download:async()=>{throw new Error("unchanged data was downloaded");}}};
+  await new PersistentIndexManager(options).check();
+  const fresh=new PersistentIndexManager(options); await fresh.check();
+  assert.equal(checks,1); assert.equal(fresh.status().freshness.checkedUtc,"2026-09-08T12:00:00Z");
+});

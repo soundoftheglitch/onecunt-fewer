@@ -23,12 +23,18 @@ OUTBOX = Path("/home/x0ar/.local/state/fewercunts-category-outbox.json")
 OLLAMA_URL = "http://172.17.0.1:11434/api/chat"
 MODEL = "qwen3:4b"
 MIN_CONFIDENCE = 0.68
+REFINEMENTS = Path("/home/x0ar/.local/state/fewercunts/reply-refinements-v1.sqlite3")
 LOCK = Path("/home/x0ar/.local/state/fewercunts-category-update.lock")
 
 
 def digest_text(*values: str) -> str:
     payload = "\0".join(values).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def refinement_hash(body, title, thread_category, parent):
+    return digest_text("reply-refinement-v1", clean_text(body,4000), clean_text(title,300),
+                       thread_category, clean_text(parent,1200))
 
 
 def clean_text(value: str, limit: int) -> str:
@@ -141,7 +147,7 @@ def schema(db: sqlite3.Connection) -> None:
       PRAGMA foreign_keys=ON;
       CREATE TABLE category_taxonomy(category_id TEXT PRIMARY KEY,parent_id TEXT REFERENCES category_taxonomy(category_id),name TEXT NOT NULL,sort_order INTEGER NOT NULL,taxonomy_version INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE thread_categories(thread_id INTEGER PRIMARY KEY REFERENCES threads(id),category_id TEXT NOT NULL REFERENCES category_taxonomy(category_id),confidence REAL NOT NULL CHECK(confidence BETWEEN 0 AND 1),source TEXT NOT NULL CHECK(source IN ('automatic','manual')),evidence_json TEXT NOT NULL DEFAULT '[]',taxonomy_version INTEGER NOT NULL DEFAULT 1);
-      CREATE TABLE post_categories(post_id INTEGER PRIMARY KEY REFERENCES posts(id),thread_id INTEGER NOT NULL REFERENCES threads(id),category_id TEXT NOT NULL REFERENCES category_taxonomy(category_id),confidence REAL NOT NULL CHECK(confidence BETWEEN 0 AND 1),source TEXT NOT NULL CHECK(source IN ('thread-inherited','manual')),taxonomy_version INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE post_categories(post_id INTEGER PRIMARY KEY REFERENCES posts(id),thread_id INTEGER NOT NULL REFERENCES threads(id),category_id TEXT NOT NULL REFERENCES category_taxonomy(category_id),confidence REAL NOT NULL CHECK(confidence BETWEEN 0 AND 1),source TEXT NOT NULL CHECK(source IN ('thread-inherited','manual','reply-refined')),taxonomy_version INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE category_overrides(kind TEXT NOT NULL CHECK(kind IN ('thread','reply')),item_id INTEGER NOT NULL,category_id TEXT NOT NULL REFERENCES category_taxonomy(category_id),updated_utc TEXT NOT NULL,PRIMARY KEY(kind,item_id));
       CREATE TABLE categorisation_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE category_thread_state(thread_id INTEGER PRIMARY KEY,content_sha256 TEXT NOT NULL,classifier TEXT NOT NULL,classified_utc TEXT NOT NULL);
@@ -152,7 +158,7 @@ def schema(db: sqlite3.Connection) -> None:
     """)
 
 
-def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: str, dry_run: bool = False) -> dict:
+def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: str, dry_run: bool = False, *, deep_decisions: dict | None = None, classify_missing: bool = True, refinements_path: Path | None = None) -> dict:
     if not archive.is_file() or not current.is_file():
         raise RuntimeError("archive or prior category database is missing")
     with sqlite3.connect(f"file:{current}?mode=ro&immutable=1", uri=True) as old:
@@ -172,12 +178,19 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
             old_reply_decisions = {int(row[0]): row[1:] for row in old.execute(query)}
         except sqlite3.OperationalError:
             old_reply_decisions = {}
+        old_metadata = dict(old.execute("SELECT key,value FROM categorisation_metadata"))
     taxonomy = [(row[0], row[2]) for row in taxonomy_rows]
     valid = {row[0] for row in taxonomy_rows}
     reviews = load_outbox(outbox)
     for item in reviews.values():
         if item.get("categoryId") not in valid:
             raise RuntimeError("review outbox contains an unknown category")
+    refinements = {}
+    refinements_path = refinements_path or (REFINEMENTS if current == CATEGORY_DB else None)
+    if refinements_path and refinements_path.is_file():
+        with sqlite3.connect(f"file:{refinements_path}?mode=ro", uri=True) as refinement_db:
+            refinements = {int(row[0]): row[1:] for row in refinement_db.execute(
+                "SELECT post_id,context_hash,category_id,confidence,model,analysed_utc FROM refinements WHERE status='complete'")}
     destination = current.with_suffix(current.suffix + ".next")
     if destination.exists():
         destination.unlink()
@@ -195,6 +208,9 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
             review = reviews.get(thread_id)
             previous = old_categories.get(thread_id)
             state_classifier = "preserved"
+            deep = (deep_decisions or {}).get(thread_id)
+            usable_deep = (deep and deep[0] == content_hash and deep[1] in valid
+                           and not deep[4].startswith("deep-local-ai-fallback:"))
             if review:
                 category_id, confidence, source, evidence = review["categoryId"], 1.0, "manual", ["dog-hat-review"]
                 state_classifier = "manual"
@@ -203,9 +219,18 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
                 category_id, confidence, source, evidence = previous[0], float(previous[1]), "manual", json.loads(previous[3])
                 state_classifier = "manual"
                 manual += 1
-            elif previous and (not old_state or old_state.get(thread_id) == content_hash):
+            elif usable_deep:
+                category_id, confidence, source = deep[1], float(deep[2]), "automatic"
+                evidence = [deep[4], {"alternative": deep[3]}]
+                state_classifier = "deep-local-ai:" + model
+                classified += 1
+            elif previous and (not classify_missing or (not old_state or old_state.get(thread_id) == content_hash)):
                 category_id, confidence, source, evidence = previous[0], float(previous[1]), previous[2], json.loads(previous[3])
                 preserved += 1
+            elif not classify_missing:
+                category_id, confidence, source = "uncategorised", 0.0, "automatic"
+                evidence = ["deep-analysis-pending"]
+                state_classifier = "retry-required"
             else:
                 classified_now = True
                 try:
@@ -237,7 +262,7 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
             if post_id not in descendant_counts:
                 descendant_counts[post_id] = sum(1 + descendants(child) for child in children.get(post_id, []))
             return descendant_counts[post_id]
-        for post_id, thread_id, message, created_utc in db.execute("SELECT id,thread_id,message,created_utc FROM posts ORDER BY id").fetchall():
+        for post_id, thread_id, message, created_utc, title, parent in db.execute("SELECT p.id,p.thread_id,p.message,p.created_utc,t.title,coalesce(parent.message,'') FROM posts p JOIN threads t ON t.id=p.thread_id LEFT JOIN posts parent ON parent.id=p.parent_id ORDER BY p.id").fetchall():
             post_id = int(post_id); thread_id = int(thread_id)
             thread_category = db.execute("SELECT category_id,confidence FROM thread_categories WHERE thread_id=?", (thread_id,)).fetchone()
             category_id, confidence = thread_category[0], float(thread_category[1])
@@ -249,11 +274,18 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
                                               thread_category_id=category_id,
                                               taxonomy_version=1)
             previous = old_reply_decisions.get(post_id)
-            if previous and previous[0] == decision["content_hash"] and previous[1] == context_hash:
+            if previous and previous[0] == decision["content_hash"] and previous[1] == context_hash and previous[4] != "qwen-refined":
                 stored = previous
             else:
                 stored = (decision["content_hash"], context_hash, decision["decision"], decision["skip_reason"], decision.get("relationship"), category_id, confidence, model, now, 1)
                 reply_new_or_changed += 1
+            refinement = refinements.get(post_id)
+            if (refinement and refinement[0] == refinement_hash(message,title,category_id,parent)
+                    and refinement[1] in valid and decision["decision"] in ("analyse", "preserve_link")):
+                stored = (stored[0],stored[1],stored[2],stored[3],"qwen-refined",
+                          refinement[1],refinement[2],refinement[3],refinement[4],1)
+                db.execute("UPDATE post_categories SET category_id=?,confidence=?,source='reply-refined' WHERE post_id=? AND source!='manual'",
+                           (refinement[1],refinement[2],post_id))
             db.execute("INSERT INTO reply_category_decisions VALUES(?,?,?,?,?,?,?,?,?,?,?,1)",
                        (post_id, thread_id, stored[0], stored[1], stored[2], stored[3], stored[4], stored[5], stored[6], stored[7], stored[8]))
             if stored[2] == "analyse": reply_analyse += 1
@@ -266,6 +298,9 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
             "reply_analysis_policy": "prefilter-v1: links preserved, isolated single words/acks/symbols skipped, engagement anchors analysed",
             "sports_default": "Bare sport means women's; /mens and /mixed are explicit; /womens is forbidden.",
         }.items())
+        if "deep_initial_generation_utc" in old_metadata:
+            db.execute("INSERT OR REPLACE INTO categorisation_metadata VALUES(?,?)",
+                       ("deep_initial_generation_utc", old_metadata["deep_initial_generation_utc"]))
         db.commit()
         if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or db.execute("PRAGMA foreign_key_check").fetchone():
             raise RuntimeError("category database validation failed")
