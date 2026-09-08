@@ -24,6 +24,10 @@
     async startup() {
       if (this.operation) return this.operation;
       if (this.state.phase === "ready" && this.state.active) return this.status();
+      if (!this.starting) this.starting = this.restore().finally(() => { this.starting = null; });
+      return this.starting;
+    }
+    async restore() {
       this.state = { ...this.state, phase: "recovering", error: null };
       this.freshness = await this.storage.readCheck?.().catch(() => null);
       await this.storage.cleanupAbandoned();
@@ -52,7 +56,7 @@
     }
     async install({ force = false } = {}) {
       if (this.operation) return this.operation;
-      if (!this.state.active && this.state.phase === "idle") await this.startup();
+      if (!this.state.active) await this.startup();
       if (this.operation) return this.operation;
       this.operation = this.installOnce(force).finally(() => { this.operation = null; });
       return this.operation;

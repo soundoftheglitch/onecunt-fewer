@@ -441,6 +441,7 @@ async function pauseImport() {
 async function clearIndex() {
   await pauseImport();
   await migration.clear();
+  await Promise.all([compactManager.starting, compactManager.operation].filter(Boolean).map(task => task.catch(() => {})));
   await compactDeltaRepository.clear();
   await persistentStorage.clearAll();
   compactManager.reset();

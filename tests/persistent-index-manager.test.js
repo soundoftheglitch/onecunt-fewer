@@ -112,3 +112,13 @@ test("automatic checks survive worker restart and do not redownload unchanged da
   const fresh=new PersistentIndexManager(options); await fresh.check();
   assert.equal(checks,1); assert.equal(fresh.status().freshness.checkedUtc,"2026-09-08T12:00:00Z");
 });
+
+test("concurrent cold-start consumers share one verification and reader open", async () => {
+  const storage=new FakeStorage();storage.complete.set(id('a'),{generationId:id('a'),watermark:'2026-09-01T00:00:00Z',documentCount:2,termCount:3});storage.active=id('a');
+  const reader=new FakeReader(storage);const open=reader.open.bind(reader);let opens=0,release;
+  const gate=new Promise(r=>{release=r;});reader.open=async id=>{opens++;await gate;return open(id);};
+  const manager=new PersistentIndexManager({storage,reader,downloader:{}});
+  const consumers=Array.from({length:20},()=>manager.startup());
+  await new Promise(r=>setImmediate(r));release();await Promise.all(consumers);
+  assert.equal(opens,1);
+});
