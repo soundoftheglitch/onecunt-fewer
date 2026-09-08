@@ -40,6 +40,17 @@ def publish():
         assert replies==db.execute("select count(*) from posts").fetchone()[0]
         assert forbidden==0
         assert db.execute("select count(*) from thread_categories where category_id not in (select category_id from category_taxonomy)").fetchone()[0]==0
+        has_reply_decisions=db.execute("select count(*) from sqlite_master where type='table' and name='reply_category_decisions'").fetchone()[0]
+        reply_decisions=reply_analyse=reply_links=reply_ignored=0
+        if has_reply_decisions:
+            columns = {row[1] for row in db.execute("PRAGMA table_info(reply_category_decisions)")}
+            assert "context_sha256" in columns
+            reply_decisions=db.execute("select count(*) from reply_category_decisions").fetchone()[0]
+            reply_analyse=db.execute("select count(*) from reply_category_decisions where decision='analyse'").fetchone()[0]
+            reply_links=db.execute("select count(*) from reply_category_decisions where decision='preserve_link'").fetchone()[0]
+            reply_ignored=db.execute("select count(*) from reply_category_decisions where decision='ignore_junk'").fetchone()[0]
+            assert reply_decisions==db.execute("select count(*) from posts").fetchone()[0]
+            assert db.execute("select count(*) from reply_category_decisions where category_id not in (select category_id from category_taxonomy)").fetchone()[0]==0
         category_map={str(row[0]):row[1] for row in db.execute("select thread_id,category_id from thread_categories order by thread_id")}
     with tempfile.TemporaryDirectory(prefix="fewercunts-category-release-") as name:
         directory=Path(name); map_asset=directory/"ntforum-categories-v1.json.gz"
@@ -50,7 +61,9 @@ def publish():
           "threads":threads,"replies":replies,"automaticallyCategorisedThreads":automatic,
           "uncategorisedThreads":threads-automatic,"sportsRule":"Bare sport means women; mens and mixed are explicit; womens suffix is forbidden.",
           "sourceBytes":SOURCE.stat().st_size,"sourceSha256":sha(SOURCE),"mapAsset":map_asset.name,
-          "mapBytes":map_asset.stat().st_size,"mapSha256":sha(map_asset)}
+          "mapBytes":map_asset.stat().st_size,"mapSha256":sha(map_asset),
+          "replyDecisions":reply_decisions,"replyAnalyse":reply_analyse,"replyPreserveLinks":reply_links,
+          "replyIgnoredJunk":reply_ignored}
         manifest_path=directory/"ntforum-categories-v1.manifest.json"; manifest_path.write_bytes(canonical(manifest))
         signature=directory/"ntforum-categories-v1.manifest.sig"
         run("openssl","pkeyutl","-sign","-rawin","-inkey",str(PRIVATE_KEY),"-in",str(manifest_path),"-out",str(signature))

@@ -9,6 +9,7 @@ import hashlib
 import html
 import json
 import os
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -32,6 +33,65 @@ def digest_text(*values: str) -> str:
 
 def clean_text(value: str, limit: int) -> str:
     return " ".join(html.unescape(str(value or "")).split())[:limit]
+
+
+ACK_TOKENS = {
+    "lol", "lmao", "rofl", "haha", "yes", "yep", "yeah", "no", "nah", "ok", "okay",
+    "thanks", "cheers", "same", "agreed", "true", "based", "nice", "cool", "wow", "bump", "this",
+}
+URL_RE = re.compile(r"(?i)^(?:https?://|www\.)\S+$|^\S+\.(?:com|net|org|co|io|gg|tv|uk|me|edu|gov)(?:/\S*)?$")
+QUOTE_RE = re.compile(r"(?is)\[quote[^\]]*\].*?\[/quote\]|<blockquote\b.*?</blockquote>")
+TOKEN_RE = re.compile(r"[\w][\w'_-]*", re.UNICODE)
+
+
+def normalise_reply_text(value: str) -> str:
+    return " ".join(html.unescape(str(value or "")).split())
+
+
+def reply_context_hash(*, content_hash: str, direct_child_count: int, descendant_count: int,
+                       direct_child_hashes: list[str], thread_category_id: str,
+                       taxonomy_version: int = 1) -> str:
+    """Hash the bounded context that can change a reply prefilter decision.
+
+    A reply body can stay unchanged while later replies make it an engagement anchor. Include counts and
+    direct-child content hashes so those anchors are re-evaluated without reprocessing unrelated replies.
+    """
+    return digest_text(
+        content_hash,
+        str(direct_child_count),
+        str(descendant_count),
+        "|".join(sorted(direct_child_hashes)[:16]),
+        thread_category_id,
+        str(taxonomy_version),
+    )
+
+
+def classify_reply_prefilter(raw_body: str, *, direct_child_count: int = 0, descendant_count: int = 0) -> dict:
+    """Return the deterministic reply-level decision before any Qwen call."""
+    original = normalise_reply_text(raw_body)
+    without_quotes = normalise_reply_text(QUOTE_RE.sub(" ", original))
+    content_hash = digest_text(original)
+    base = {"normalized": without_quotes, "content_hash": content_hash, "relationship": None}
+    if not original:
+        return {**base, "decision": "ignore_junk", "skip_reason": "empty"}
+    if original and not without_quotes:
+        return {**base, "decision": "ignore_junk", "skip_reason": "quote_only"}
+    if URL_RE.fullmatch(without_quotes):
+        return {**base, "decision": "preserve_link", "skip_reason": None, "relationship": "link_only"}
+    tokens = TOKEN_RE.findall(without_quotes)
+    has_alnum = any(ch.isalnum() for ch in without_quotes)
+    if not has_alnum and len(without_quotes) <= 80:
+        return {**base, "decision": "ignore_junk", "skip_reason": "symbol_only"}
+    if len(tokens) == 1:
+        if not re.search(r"[A-Za-z0-9]", tokens[0]):
+            return {**base, "decision": "analyse", "skip_reason": None}
+        if direct_child_count >= 2 or descendant_count >= 3:
+            return {**base, "decision": "analyse", "skip_reason": None, "relationship": "engagement_anchor"}
+        return {**base, "decision": "ignore_junk", "skip_reason": "single_word_non_url"}
+    lowered = [token.casefold() for token in tokens]
+    if len(tokens) <= 3 and all(token in ACK_TOKENS for token in lowered):
+        return {**base, "decision": "ignore_junk", "skip_reason": "short_ack"}
+    return {**base, "decision": "analyse", "skip_reason": None}
 
 
 def load_outbox(path: Path) -> dict[int, dict]:
@@ -85,8 +145,10 @@ def schema(db: sqlite3.Connection) -> None:
       CREATE TABLE category_overrides(kind TEXT NOT NULL CHECK(kind IN ('thread','reply')),item_id INTEGER NOT NULL,category_id TEXT NOT NULL REFERENCES category_taxonomy(category_id),updated_utc TEXT NOT NULL,PRIMARY KEY(kind,item_id));
       CREATE TABLE categorisation_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
       CREATE TABLE category_thread_state(thread_id INTEGER PRIMARY KEY,content_sha256 TEXT NOT NULL,classifier TEXT NOT NULL,classified_utc TEXT NOT NULL);
+      CREATE TABLE reply_category_decisions(post_id INTEGER PRIMARY KEY REFERENCES posts(id),thread_id INTEGER NOT NULL REFERENCES threads(id),content_sha256 TEXT NOT NULL,context_sha256 TEXT NOT NULL DEFAULT '',decision TEXT NOT NULL CHECK(decision IN ('analyse','preserve_link','inherit_thread_category','ignore_junk')),skip_reason TEXT,relationship TEXT,category_id TEXT NOT NULL REFERENCES category_taxonomy(category_id),confidence REAL NOT NULL CHECK(confidence BETWEEN 0 AND 1),model TEXT,analysed_utc TEXT NOT NULL,taxonomy_version INTEGER NOT NULL DEFAULT 1);
       CREATE INDEX post_categories_category ON post_categories(category_id,post_id);
       CREATE INDEX thread_categories_category ON thread_categories(category_id,thread_id);
+      CREATE INDEX reply_category_decisions_thread ON reply_category_decisions(thread_id,post_id);
     """)
 
 
@@ -101,6 +163,15 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
             old_state = {int(row[0]): row[1] for row in old.execute("SELECT thread_id,content_sha256 FROM category_thread_state")}
         except sqlite3.OperationalError:
             old_state = {}
+        try:
+            columns = {row[1] for row in old.execute("PRAGMA table_info(reply_category_decisions)")}
+            if "context_sha256" in columns:
+                query = "SELECT post_id,content_sha256,context_sha256,decision,skip_reason,relationship,category_id,confidence,model,analysed_utc,taxonomy_version FROM reply_category_decisions"
+            else:
+                query = "SELECT post_id,content_sha256,'' AS context_sha256,decision,skip_reason,relationship,category_id,confidence,model,analysed_utc,taxonomy_version FROM reply_category_decisions"
+            old_reply_decisions = {int(row[0]): row[1:] for row in old.execute(query)}
+        except sqlite3.OperationalError:
+            old_reply_decisions = {}
     taxonomy = [(row[0], row[2]) for row in taxonomy_rows]
     valid = {row[0] for row in taxonomy_rows}
     reviews = load_outbox(outbox)
@@ -113,6 +184,7 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
     shutil.copy2(archive, destination)
     db = sqlite3.connect(destination)
     automatic = manual = uncertain = classified = preserved = 0
+    reply_new_or_changed = reply_analyse = reply_preserve_link = reply_ignored = reply_inherited = 0
     try:
         schema(db)
         db.executemany("INSERT INTO category_taxonomy VALUES(?,?,?,?,?)", taxonomy_rows)
@@ -153,9 +225,45 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
             if row[0] == "reply" and db.execute("SELECT 1 FROM posts WHERE id=?", (row[1],)).fetchone():
                 db.execute("INSERT INTO category_overrides VALUES(?,?,?,?)", row)
         db.execute("""INSERT INTO post_categories SELECT p.id,p.thread_id,COALESCE(o.category_id,t.category_id),CASE WHEN o.item_id IS NULL THEN t.confidence ELSE 1 END,CASE WHEN o.item_id IS NULL THEN 'thread-inherited' ELSE 'manual' END,1 FROM posts p JOIN thread_categories t ON t.thread_id=p.thread_id LEFT JOIN category_overrides o ON o.kind='reply' AND o.item_id=p.id""")
+        child_counts = {int(row[0]): int(row[1]) for row in db.execute("SELECT parent_id,COUNT(*) FROM posts WHERE parent_id IS NOT NULL GROUP BY parent_id")}
+        children: dict[int, list[int]] = {}
+        post_hashes: dict[int, str] = {}
+        for post_id, message in db.execute("SELECT id,message FROM posts"):
+            post_hashes[int(post_id)] = digest_text(normalise_reply_text(str(message or "")))
+        for post_id, parent_id in db.execute("SELECT id,parent_id FROM posts WHERE parent_id IS NOT NULL"):
+            children.setdefault(int(parent_id), []).append(int(post_id))
+        descendant_counts: dict[int, int] = {}
+        def descendants(post_id: int) -> int:
+            if post_id not in descendant_counts:
+                descendant_counts[post_id] = sum(1 + descendants(child) for child in children.get(post_id, []))
+            return descendant_counts[post_id]
+        for post_id, thread_id, message, created_utc in db.execute("SELECT id,thread_id,message,created_utc FROM posts ORDER BY id").fetchall():
+            post_id = int(post_id); thread_id = int(thread_id)
+            thread_category = db.execute("SELECT category_id,confidence FROM thread_categories WHERE thread_id=?", (thread_id,)).fetchone()
+            category_id, confidence = thread_category[0], float(thread_category[1])
+            decision = classify_reply_prefilter(str(message or ""), direct_child_count=child_counts.get(post_id, 0), descendant_count=descendants(post_id))
+            context_hash = reply_context_hash(content_hash=decision["content_hash"],
+                                              direct_child_count=child_counts.get(post_id, 0),
+                                              descendant_count=descendants(post_id),
+                                              direct_child_hashes=[post_hashes[child] for child in children.get(post_id, [])],
+                                              thread_category_id=category_id,
+                                              taxonomy_version=1)
+            previous = old_reply_decisions.get(post_id)
+            if previous and previous[0] == decision["content_hash"] and previous[1] == context_hash:
+                stored = previous
+            else:
+                stored = (decision["content_hash"], context_hash, decision["decision"], decision["skip_reason"], decision.get("relationship"), category_id, confidence, model, now, 1)
+                reply_new_or_changed += 1
+            db.execute("INSERT INTO reply_category_decisions VALUES(?,?,?,?,?,?,?,?,?,?,?,1)",
+                       (post_id, thread_id, stored[0], stored[1], stored[2], stored[3], stored[4], stored[5], stored[6], stored[7], stored[8]))
+            if stored[2] == "analyse": reply_analyse += 1
+            elif stored[2] == "preserve_link": reply_preserve_link += 1
+            elif stored[2] == "ignore_junk": reply_ignored += 1
+            else: reply_inherited += 1
         db.executemany("INSERT INTO categorisation_metadata VALUES(?,?)", {
             "taxonomy_version": "1", "classifier": f"local-ai:{model}", "source_path": str(archive),
             "last_update_utc": now, "minimum_ai_confidence": str(MIN_CONFIDENCE),
+            "reply_analysis_policy": "prefilter-v1: links preserved, isolated single words/acks/symbols skipped, engagement anchors analysed",
             "sports_default": "Bare sport means women's; /mens and /mixed are explicit; /womens is forbidden.",
         }.items())
         db.commit()
@@ -165,7 +273,11 @@ def update(archive: Path, current: Path, outbox: Path, ollama_url: str, model: s
         db.close()
     result = {"result": "dry-run" if dry_run else "updated", "classified": classified, "preserved": preserved,
               "manual": manual, "automatic": automatic, "uncategorised": uncertain,
-              "reviewedThreadIds": sorted(reviews), "model": model}
+              "reviewedThreadIds": sorted(reviews), "model": model,
+              "replyDecisionRows": reply_analyse + reply_preserve_link + reply_ignored + reply_inherited,
+              "replyNewOrChanged": reply_new_or_changed, "replyAnalyse": reply_analyse,
+              "replyPreserveLink": reply_preserve_link, "replyIgnoredJunk": reply_ignored,
+              "replyInherited": reply_inherited}
     if dry_run:
         destination.unlink()
     else:
