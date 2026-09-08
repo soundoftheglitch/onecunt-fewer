@@ -131,4 +131,25 @@ def run(args):
             'total':total,'processed':count,'failedInference':failures,'dueRemaining':len(pending)-done,
             'processedThisRun':done,'seconds':round(time.monotonic()-started,1)}
 
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--archive',type=Path,default=ARCHIVE)
+    parser.add_argument('--database',type=Path,default=CATEGORY_DB)
+    parser.add_argument('--state',type=Path,default=STATE)
+    parser.add_argument('--ollama-url',default=OLLAMA_URL)
+    parser.add_argument('--model',default=MODEL)
+    parser.add_argument('--batch-size',type=int,default=1)
+    parser.add_argument('--request-timeout',type=int,default=240)
+    parser.add_argument('--singleton-attempts',type=int,default=1)
+    parser.add_argument('--limit',type=int,default=6)
+    parser.add_argument('--no-finalise',action='store_true')
+    parser.add_argument('--merge-only',action='store_true')
+    args=parser.parse_args()
+    if args.batch_size<1 or args.limit<0 or args.request_timeout<1 or args.singleton_attempts<1:
+        parser.error('batch size, timeout and attempts must be positive; limit must be non-negative')
+    args.state.parent.mkdir(parents=True,exist_ok=True)
+    with args.state.with_suffix('.lock').open('a') as campaign_lock:
+        fcntl.flock(campaign_lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        print(json.dumps(run(args),sort_keys=True))
+
 if __name__=='__main__': main()

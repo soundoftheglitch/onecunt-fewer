@@ -46,3 +46,13 @@ class PublicationCoverageTests(ReplyDecisionIntegrationTests):
         with sqlite3.connect(self.category) as db:db.execute('drop table reply_category_decisions')
         with patch.object(publisher,'preflight'),patch.object(publisher,'SOURCE',self.category):
             with self.assertRaisesRegex(RuntimeError,'reply decisions are missing'):publisher.publish()
+
+class CampaignCliTests(__import__('unittest').TestCase):
+    def test_real_entrypoint_exposes_bounded_and_merge_only_modes(self):
+        import subprocess,sys
+        from pathlib import Path
+        script=Path(__file__).resolve().parents[1]/'scripts/deep_category_campaign.py'
+        result=subprocess.run([sys.executable,str(script),'--help'],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('--merge-only',result.stdout)
+        self.assertIn('--limit',result.stdout)
